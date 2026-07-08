@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
 import time
 
-# 한글 폰트 설정 (웹 서버 환경용 안전장치)
+# 웹 서버 환경에서 한글 깨짐을 원천 차단하기 위해 기본 sans-serif 테마 사용
 plt.rcParams['font.family'] = 'sans-serif'
 plt.rcParams['axes.unicode_minus'] = False
 
@@ -27,12 +27,12 @@ FIXED_LIMIT = 15.0
 
 def get_star_color_and_type(teff):
     if pd.isna(teff): return '#FF9F43', 'Unknown'
-    if teff >= 10000: return '#9bb0ff', 'O / B (푸른색)'
-    elif teff >= 7500: return '#aabfff', 'A (청백색)'
-    elif teff >= 6000: return '#f8f7ff', 'F (백색)'
-    elif teff >= 5200: return '#fff4ea', 'G (황백색)'
-    elif teff >= 3700: return '#ffd2a1', 'K (주황색)'
-    else: return '#ff8585', 'M (적색)'
+    if teff >= 10000: return '#9bb0ff', 'O / B'
+    elif teff >= 7500: return '#aabfff', 'A'
+    elif teff >= 6000: return '#f8f7ff', 'F'
+    elif teff >= 5200: return '#fff4ea', 'G'
+    elif teff >= 3700: return '#ffd2a1', 'K'
+    else: return '#ff8585', 'M'
 
 def solve_kepler(M, e):
     func = lambda E: E - e * np.sin(E) - M
@@ -44,14 +44,14 @@ def solve_kepler(M, e):
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 외계행성 아카이브 데이터를 기반으로 작동하는 정밀 궤도 시뮬레이터입니다.")
+st.markdown("NASA exoplanet archive 데이터를 기반으로 작동하는 궤도 시뮬레이터입니다.")
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
 fix_scale = st.sidebar.checkbox("시뮬레이션 축 범위 고정 (⚠️천체 크기 연동)", value=False)
 selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
 
-# 애니메이션 재생/일시정지 버튼 추가
+# 애니메이션 재생/일시정지 버튼
 is_playing = st.sidebar.checkbox("▶️ 자동 공전 애니메이션 재생", value=True)
 
 # 행성 데이터 추출
@@ -64,14 +64,12 @@ b = a * np.sqrt(1 - e**2)
 c = a * e
 mu = (4 * np.pi**2 * (a**3)) / (T**2) if T > 0 else 1.0
 
-# 💡 [핵심 변수] 사용자가 슬라이더를 만지고 있는 중인지 감지하는 플래그
 if "user_is_sliding" not in st.session_state:
     st.session_state.user_is_sliding = False
 
 if "sim_time" not in st.session_state or st.sidebar.button("🔄 시간 초기화"):
     st.session_state.sim_time = 0.0
 
-# 💡 [콜백 함수] 사용자가 슬라이더를 조작하면 호출되어 시간을 강제로 동기화합니다.
 def update_time_from_slider():
     st.session_state.sim_time = st.session_state.slider_key
     st.session_state.user_is_sliding = True
@@ -92,9 +90,9 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
     
-    # 💡 슬라이더 값의 튕김을 막기 위해 고유 key값과 온체인지(on_change) 콜백을 바인딩합니다.
+    # 그래프 안에 현재 시간을 표시하므로, 슬라이더는 조작용 궤도 핸들 역할만 유연하게 수행하도록 둡니다.
     time_slider = st.slider(
-        "궤도 시간 진행도 (일)", 
+        "궤도 조작 핸들 (마우스로 드래그 가능)", 
         min_value=0.0, 
         max_value=float(T), 
         value=float(np.clip(st.session_state.sim_time, 0.0, T)),
@@ -110,8 +108,10 @@ with col1:
     ax_sim.set_aspect('equal', adjustable='box')
     ax_sim.grid(True, linestyle='--', alpha=0.2, color='gray')
     ax_sim.tick_params(colors='white')
-    ax_sim.set_xlabel("X 거리 (AU)", color='white')
-    ax_sim.set_ylabel("Y 거리 (AU)", color='white')
+    
+    # 💡 [해결 1] 축 글자를 영어로 완전히 바꿔 서버에서도 안 깨지게 수정
+    ax_sim.set_xlabel("X Distance (AU)", color='white', fontsize=11)
+    ax_sim.set_ylabel("Y Distance (AU)", color='white', fontsize=11)
     
     # 궤도선
     theta = np.linspace(0, 2 * np.pi, 300)
@@ -151,9 +151,9 @@ with col1:
     # 행성 그리기
     ax_sim.plot(x, y, 'o', markersize=planet_marker_size, color='#1dd1a1', zorder=6)
     
-    # 텍스트 오버레이
-    ax_sim.text(0.05, 0.94, f"Time: {st.session_state.sim_time:.1f} / {T:.1f} days", transform=ax_sim.transAxes, color='white', fontsize=10, fontweight='bold')
-    ax_sim.text(0.05, 0.89, f"Speed: {v_kms:.2f} km/s", transform=ax_sim.transAxes, color='#1dd1a1', fontsize=10, fontweight='bold')
+    # 💡 [해결 2] 슬라이더 위 숫자 대신 그래프 왼쪽 위에 대형 오버레이 자막으로 흐르는 시간을 실시간 노출!
+    ax_sim.text(0.05, 0.94, f"Time: {st.session_state.sim_time:.1f} / {T:.1f} days", transform=ax_sim.transAxes, color='white', fontsize=11, fontweight='bold')
+    ax_sim.text(0.05, 0.89, f"Speed: {v_kms:.2f} km/s", transform=ax_sim.transAxes, color='#1dd1a1', fontsize=11, fontweight='bold')
     
     if is_star_rad_missing:
         st.warning("⚠️ 항성 반지름 데이터가 없어 기본 크기(1.0 Solar Rad)로 표시 중입니다.")
@@ -180,14 +180,13 @@ with col2:
     )
     st.markdown(info_text)
 
-# 💡 자동 재생 로직 제어
+# 자동 재생 로직
 if is_playing:
-    # 사용자가 마우스로 슬라이더를 조작한 순간에는 시간을 1 프레임 멈춰서 강제 복귀 현상을 차단합니다.
     if st.session_state.user_is_sliding:
-        st.session_state.user_is_sliding = False  # 플래그 초기화 후 이번 프레임은 대기
-        time.sleep(0.4)  # 사용자가 마우스를 놓는 시간을 벌어주기 위한 미세 대기
+        st.session_state.user_is_sliding = False
+        time.sleep(0.4)
     else:
-        time.sleep(0.03)  # 프레임 안정화 딜레이
+        time.sleep(0.03)
         st.session_state.sim_time += dt
         if st.session_state.sim_time > T:
             st.session_state.sim_time = 0.0
