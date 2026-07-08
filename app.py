@@ -64,7 +64,7 @@ b = a * np.sqrt(1 - e**2)
 c = a * e
 mu = (4 * np.pi**2 * (a**3)) / (T**2) if T > 0 else 1.0
 
-# 💡 [핵심] 웹 세션 상태(Session State)를 이용해 자동으로 흘러갈 시간을 저장합니다.
+# 웹 세션 상태(Session State)를 이용해 자동으로 흘러갈 시간을 저장
 if "sim_time" not in st.session_state or st.sidebar.button("🔄 시간 초기화"):
     st.session_state.sim_time = 0.0
 
@@ -85,7 +85,6 @@ with col1:
     st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
     
     # 슬라이더가 현재 누적된 자동 시간(sim_time)을 반영하도록 설정
-    # 사용자가 슬라이더를 강제로 조작하면 그 시간대로 고정 및 동기화됩니다.
     time_slider = st.slider(
         "궤도 시간 진행도 (일)", 
         min_value=0.0, 
@@ -160,26 +159,26 @@ with col2:
     def check_val(val, unit=""): return f"{val:.3f} {unit}" if not pd.isna(val) else "정보 없음"
     star_rad_display = "정보 없음 (기본값)" if is_star_rad_missing else f"{star_rad:.3f} Solar Rad"
     
-    st.markdown(f"""
-    ### 🪐 행성 특성 정보
-    * **이름:** `{p_data['pl_name']}`
-    * **공전 주기:** `{T:.1f} 일`
-    * **궤도 장반경 (거리):** `{a:.3f} AU`
-    * **궤도 이심률 (타원형 정도):** `{e:.3f}`
-    * **행성 반지름:** `정보 없음 (화면 고정)`
-    
-    ### ☀️ 중심 항성(별) 정보
-    * **분광형 유형:** `{spectral_type}`
-    * **표면 온도:** `{check_val(star_teff, 'K')}`
-    * **항성 반지름:** `{star_rad_display}`
-    * **항성 질량:** `{check_val(p_data['st_mass'] if 'st_mass' in p_data else np.nan, 'Solar Mass')}`
-    """)
+    # 에러 예방을 위해 줄바꿈 결합 방식으로 마크다운 텍스트 생성
+    info_text = (
+        f"### 🪐 행성 특성 정보\n"
+        f"* **이름:** `{p_data['pl_name']}`\n"
+        f"* **공전 주기:** `{T:.1f} 일` \n"
+        f"* **궤도 장반경 (거리):** `{a:.3f} AU` \n"
+        f"* **궤도 이심률 (타원형 정도):** `{e:.3f}` \n"
+        f"* **행성 반지름:** `정보 없음 (화면 고정)` \n\n"
+        f"### ☀️ 중심 항성(별) 정보\n"
+        f"* **분광형 유형:** `{spectral_type}` \n"
+        f"* **표면 온도:** `{check_val(star_teff, 'K')}` \n"
+        f"* **항성 반지름:** `{star_rad_display}` \n"
+        f"* **항성 질량:** `{check_val(p_data['st_mass'] if 'st_mass' in p_data else np.nan, 'Solar Mass')}`"
+    )
+    st.markdown(info_text)
 
-# 💡 [핵심] 자동 재생 체크박스가 활성화되어 있으면, 시간을 dt만큼 늘리고 브라우저를 즉시 새로고침합니다.
+# 자동 재생 로직
 if is_playing:
-    time.sleep(0.03)  # 부드러운 프레임을 위한 아주 미세한 딜레이 (약 30fps 목표)
+    time.sleep(0.03)  # 프레임 안정화를 위한 딜레이
     st.session_state.sim_time += dt
     if st.session_state.sim_time > T:
         st.session_state.sim_time = 0.0
-    st.rerun()  # 💡 코드를 처음부터 다시 실행시켜 화면을 실시간 업데이트!al(p_data['st_mass'] if 'st_mass' in p_data else np.nan, 'Solar Mass')}`
-    """)
+    st.rerun()
