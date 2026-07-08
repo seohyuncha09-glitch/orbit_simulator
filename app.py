@@ -39,11 +39,11 @@ def solve_kepler(M, e):
     return fsolve(func, M)[0]
 
 # ==========================================
-# 2. 웹 UI 구성 및 자동 애니메이션 변수 제어
+# 2. 웹 UI 구성 및 세션 상태 정의
 # ==========================================
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
-st.title("🌌 외계행성 공전 궤도 시뮬레이터")
+st.title("외계행성 공전 궤도 시뮬레이터")
 st.markdown("NASA 외계행성 아카이브 데이터를 기반으로 작동하는 정밀 궤도 시뮬레이터입니다.")
 
 # 사이드바 제어 패널
@@ -64,9 +64,17 @@ b = a * np.sqrt(1 - e**2)
 c = a * e
 mu = (4 * np.pi**2 * (a**3)) / (T**2) if T > 0 else 1.0
 
-# 웹 세션 상태(Session State)를 이용해 자동으로 흘러갈 시간을 저장
+# 💡 [핵심 변수] 사용자가 슬라이더를 만지고 있는 중인지 감지하는 플래그
+if "user_is_sliding" not in st.session_state:
+    st.session_state.user_is_sliding = False
+
 if "sim_time" not in st.session_state or st.sidebar.button("🔄 시간 초기화"):
     st.session_state.sim_time = 0.0
+
+# 💡 [콜백 함수] 사용자가 슬라이더를 조작하면 호출되어 시간을 강제로 동기화합니다.
+def update_time_from_slider():
+    st.session_state.sim_time = st.session_state.slider_key
+    st.session_state.user_is_sliding = True
 
 # 행성 공전주기에 맞춰 프레임당 흐를 시간(dt)을 계산
 if T < 10:
@@ -84,18 +92,16 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
     
-    # 슬라이더가 현재 누적된 자동 시간(sim_time)을 반영하도록 설정
+    # 💡 슬라이더 값의 튕김을 막기 위해 고유 key값과 온체인지(on_change) 콜백을 바인딩합니다.
     time_slider = st.slider(
         "궤도 시간 진행도 (일)", 
         min_value=0.0, 
         max_value=float(T), 
         value=float(np.clip(st.session_state.sim_time, 0.0, T)),
-        step=float(np.clip(T/100, 0.1, 5.0))
+        step=float(np.clip(T/100, 0.1, 5.0)),
+        key="slider_key",
+        on_change=update_time_from_slider
     )
-    
-    # 사용자가 마우스로 슬라이더를 건드렸다면 그 값을 세션 시간에 수동 반영
-    if abs(time_slider - st.session_state.sim_time) > (dt * 1.5):
-        st.session_state.sim_time = time_slider
 
     # 그래프 그리기
     fig, ax_sim = plt.subplots(figsize=(6, 6))
@@ -159,7 +165,6 @@ with col2:
     def check_val(val, unit=""): return f"{val:.3f} {unit}" if not pd.isna(val) else "정보 없음"
     star_rad_display = "정보 없음 (기본값)" if is_star_rad_missing else f"{star_rad:.3f} Solar Rad"
     
-    # 에러 예방을 위해 줄바꿈 결합 방식으로 마크다운 텍스트 생성
     info_text = (
         f"### 🪐 행성 특성 정보\n"
         f"* **이름:** `{p_data['pl_name']}`\n"
@@ -175,10 +180,16 @@ with col2:
     )
     st.markdown(info_text)
 
-# 자동 재생 로직
+# 💡 자동 재생 로직 제어
 if is_playing:
-    time.sleep(0.03)  # 프레임 안정화를 위한 딜레이
-    st.session_state.sim_time += dt
-    if st.session_state.sim_time > T:
-        st.session_state.sim_time = 0.0
+    # 사용자가 마우스로 슬라이더를 조작한 순간에는 시간을 1 프레임 멈춰서 강제 복귀 현상을 차단합니다.
+    if st.session_state.user_is_sliding:
+        st.session_state.user_is_sliding = False  # 플래그 초기화 후 이번 프레임은 대기
+        time.sleep(0.4)  # 사용자가 마우스를 놓는 시간을 벌어주기 위한 미세 대기
+    else:
+        time.sleep(0.03)  # 프레임 안정화 딜레이
+        st.session_state.sim_time += dt
+        if st.session_state.sim_time > T:
+            st.session_state.sim_time = 0.0
+            
     st.rerun()
