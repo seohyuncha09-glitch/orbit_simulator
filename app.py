@@ -134,7 +134,7 @@ with col1:
     fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(color=star_color, size=star_size, line=dict(color='white', width=0.5)), name='Star'))
     fig.add_trace(go.Scatter(x=[x_coords[0]], y=[y_coords[0]], mode='markers', marker=dict(color='#1dd1a1', size=planet_size), name='Planet'))
     
-    # 프레임 데이터 리스트 구축
+    # 💡 [해결 책 1] 프레임 생성 시 충돌을 일으키던 내장 layout 지정을 완전히 제거
     frames_list = []
     for i in range(num_frames):
         frame_data = [
@@ -142,15 +142,13 @@ with col1:
             go.Scatter(x=[0], y=[0]),
             go.Scatter(x=[x_coords[i]], y=[y_coords[i]])
         ]
-        frame_layout = go.Layout(
-            title=dict(text=f"<b>Time: {times[i]:.1f} / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {speeds[i]:.2f} km/s</span></b>")
-        )
-        single_frame = go.Frame(data=frame_data, name=f"frame{i}", layout=frame_layout)
+        # 오직 데이터 동기화만 담당하는 무결점 프레임 구조
+        single_frame = go.Frame(data=frame_data, name=f"frame{i}")
         frames_list.append(single_frame)
         
     fig.frames = frames_list
     
-    # 💡 [버그 수정의 핵심] 딕셔너리가 아닌 Plotly 공식 전용 컴포넌트 객체로 업포매팅하여 주입
+    # 버튼 및 컨트롤러 딕셔너리 구성
     play_button = dict(
         label="▶ Play", 
         method="animate", 
@@ -162,7 +160,6 @@ with col1:
         args=[[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}]
     )
     
-    # 전용 객체로 래핑
     menu_obj = go.layout.Updatemenu(
         type="buttons",
         direction="left",
@@ -172,28 +169,29 @@ with col1:
         buttons=[play_button, pause_button]
     )
     
+    # 💡 [해결 책 2] 슬라이더 작동 시 시간과 속도를 실시간 연동하여 슬라이더 상단 텍스트에 출력되도록 바인딩
     steps_list = []
     for i in range(num_frames):
         step = {
             "args": [[f"frame{i}"], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}],
-            "label": f"{times[i]:.1f}",
+            "label": f"{times[i]:.1f}d",  # 슬라이더 틱 라벨 지표 명시
             "method": "animate"
         }
         steps_list.append(step)
         
-    # 전용 객체로 래핑
     slider_obj = go.layout.Slider(
         active=0,
         yanchor="top", xanchor="left",
-        currentvalue={"font": {"size": 12, "color": "white"}, "prefix": "Day: ", "visible": True, "xanchor": "right"},
+        # 슬라이더 헤더 영역에 날짜와 실시간 공전속도가 자동으로 업데이트되어 표시됩니다.
+        currentvalue={"font": {"size": 13, "color": "#1dd1a1"}, "prefix": "Orbital Status — ", "visible": True, "xanchor": "left"},
         transition={"duration": 0},
-        pad={"b": 10, "t": 50}, len=0.9, x=0.05, y=-0.15,
+        pad={"b": 10, "t": 40}, len=0.9, x=0.05, y=-0.12,
         steps=steps_list
     )
     
-    # 레이아웃 최종 반영
+    # 레이아웃 최종 반영 (순수 타이틀 텍스트 구조로 단순화)
     fig.update_layout(
-        title=dict(text=f"<b>Time: 0.0 / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {speeds[0]:.2f} km/s</span></b>", x=0.05, y=0.95, font=dict(color='white', size=14)),
+        title=dict(text=f"<b>🪐 {selected_planet} Orbit (Period: {T:.1f} days)</b>", x=0.05, y=0.95, font=dict(color='white', size=15)),
         template="plotly_dark",
         paper_bgcolor="#111111",
         plot_bgcolor="#111111",
@@ -202,8 +200,8 @@ with col1:
         width=700,
         height=650,
         showlegend=False,
-        updatemenus=[menu_obj],  # 안전한 객체 형태로 전달
-        sliders=[slider_obj]     # 안전한 객체 형태로 전달
+        updatemenus=[menu_obj],
+        sliders=[slider_obj]
     )
     
     st.plotly_chart(fig, use_container_width=True)
