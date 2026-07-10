@@ -362,12 +362,12 @@ with col2:
     star_teff_display = f"{star_teff:.1f} K" if not pd.isna(star_teff) else "정보 없음"
     
     info_text = (
-        f"### 🪐 행성 특성 정보\n"
+        f"### 🪐 행성 궤도 정보\n"
         f"* **이름:** `{p_data['pl_name']}`\n"
         f"* **공전 주기:** `{T:.1f} 일` \n"
-        f"* **궤도 장반경 (거리):** `{a:.3f} AU` \n"
-        f"* **궤도 이심률 (타원형 정도):** `{e:.3f}` \n\n"
-        f"### ☀️ 중심 항성(별) 정보\n"
+        f"* **궤도 장반경:** `{a:.3f} AU` \n"
+        f"* **궤도 이심률:** `{e:.3f}` \n\n"
+        f"### ☀️ 중심 항성 정보\n"
         f"* **항성 반지름:** `{star_rad_display}` \n"
         f"* **항성 질량:** `{check_val(p_data['st_mass'] if 'st_mass' in p_data else np.nan, 'Solar Mass')}`\n"
         f"* **항성 표면온도:** `{star_teff_display}`\n"
