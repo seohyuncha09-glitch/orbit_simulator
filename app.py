@@ -17,21 +17,27 @@ except Exception as e:
     st.stop()
 
 # ==========================================
-# 2. 웹 UI 구성 및 데이터 추출
+# 2. 웹 UI 구성
 # ==========================================
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 사이드바의 체크박스를 통해 행성 간의 상대적 궤도 크기를 비교할 수 있습니다.")
+st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 배속 조절 버튼을 사용하여 공전 속도를 제어할 수 있습니다.")
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
 selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
 
-# 💡 [새로운 기능] 전체 축 범위 고정(상대적 크기 비교) 체크박스 추가
-fix_axis = st.sidebar.checkbox("📐 전체 축 범위 고정 (상대적 크기 비교)", value=False)
+# 💡 [2번 기능 추가] 공전 속도 배속 선택 버튼 (라디오 버튼 스타일)
+speed_option = st.sidebar.radio(
+    "⏱️ 공전 속도 배속 조절",
+    options=["0.5x (느리게)", "1.0x (정속)", "2.0x (빠르게)"],
+    index=1  # 기본값: 1.0x (정속)
+)
+# 문자열에서 숫자 배속 값만 추출 (0.5, 1.0, 2.0)
+speed_multiplier = float(speed_option.split("x")[0])
 
-# 현재 행성 데이터 추출
+# 행성 데이터 추출
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
 a = float(p_data['pl_orbsmax'])
 e = float(p_data['pl_orbeccen']) if not pd.isna(p_data['pl_orbeccen']) else 0.0
@@ -40,18 +46,6 @@ T = float(p_data['pl_orbper'])
 b = a * np.sqrt(1 - e**2)
 c = a * e
 mu = (4 * np.pi**2 * (a**3)) / (T**2) if T > 0 else 1.0
-
-# 💡 [새로운 기능] 데이터 세트 전체의 최대 원일점(항성 기준 가장 먼 거리) 계산
-# 체크박스가 켜졌을 때 사용할 고정 한계값을 설정합니다.
-if fix_axis:
-    # 전체 행성의 (장반경 * (1 + 이심률)) 중 최댓값을 찾되, 유효하지 않은 데이터는 제외하고 기본 안전 마진을 둡니다.
-    df['max_r'] = df['pl_orbsmax'] * (1 + df['pl_orbeccen'].fillna(0))
-    global_max_orbit = float(df['max_r'].max())
-    # 너무 극단적인 이상치가 있을 경우를 대비해 안전 범위를 잡거나, 전체 최대치에 마진을 둡니다.
-    limit = global_max_orbit * 1.1 
-else:
-    # 기존 모드: 현재 선택된 행성에 딱 맞춰 자동 줌인
-    limit = (a + c) * 1.3
 
 # 항성 정보 물리 매핑
 is_star_rad_missing = 'st_rad' not in p_data or pd.isna(p_data['st_rad'])
@@ -120,7 +114,9 @@ with col1:
             const mu = {mu};
             const starColor = "{star_color}";
             
-            // 패딩 설정
+            // 스트림릿에서 전달받은 배속Multiplier 값 적용
+            const speedMultiplier = {speedMultiplier};
+            
             const paddingLeft = 70;
             const paddingRight = 40;
             const paddingTop = 40;
@@ -129,11 +125,10 @@ with col1:
             const plotWidth = canvas.width - (paddingLeft + paddingRight);
             const plotHeight = canvas.height - (paddingTop + paddingBottom);
             
-            // 파이썬에서 계산된 가변 혹은 고정 limit 적용
-            const limit = {limit};
+            const limit = (a + c) * 1.3;
             const scale = Math.min(plotWidth, plotHeight) / (2 * limit);
             
-            // 체크박스 유무와 무관하게 항성(0,0) 중심을 기준점으로 잡고, 왼쪽 시프트하여 오른쪽 시야 확보
+            // 항성 중심을 기준으로 왼쪽 시프트
             const centerX = paddingLeft + (plotWidth / 2) - (plotWidth * 0.15);
             const centerY = paddingTop + (plotHeight / 2);
             
@@ -151,7 +146,7 @@ with col1:
 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
-                // 1. 축 가이드 라인 및 숫자 눈금 단위 동적 최적화
+                // 1. 축 가이드 라인 및 숫자 눈금 그리기
                 ctx.lineWidth = 1;
                 ctx.font = "11px 'Segoe UI'";
                 
@@ -161,8 +156,7 @@ with col1:
                 if (limit > 20) stepAU = 5;
                 if (limit > 50) stepAU = 10;
                 if (limit > 150) stepAU = 50;
-                if (limit > 500) stepAU = 200;
-                if (limit > 1500) stepAU = 500; // 초대형 고정 축을 위한 세팅 추가
+                if (limit > 600) stepAU = 200;
                 if (limit < 1) stepAU = 0.2;
                 if (limit < 0.3) stepAU = 0.05;
 
@@ -196,7 +190,6 @@ with col1:
                     }}
                 }}
 
-                // 테두리 마감
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
                 ctx.strokeRect(paddingLeft, paddingTop, plotWidth, plotHeight);
 
@@ -213,7 +206,7 @@ with col1:
                 
                 // 3. 중심 항성 (태양)
                 ctx.beginPath();
-                ctx.arc(centerX, centerY, Math.max(4, Math.min({star_rad} * 10, 28)), 0, 2 * Math.PI);
+                ctx.arc(centerX, centerY, Math.max(6, Math.min({star_rad} * 10, 28)), 0, 2 * Math.PI);
                 ctx.fillStyle = starColor;
                 ctx.shadowColor = starColor;
                 ctx.shadowBlur = 12;
@@ -230,15 +223,15 @@ with col1:
                 let planetX = centerX + (c * scale) + (a * scale * Math.cos(E));
                 let planetY = centerY + (b * scale * Math.sin(E));
                 
-                // 5. 초록색 외계행성 (축 고정 시 너무 작아져서 안 보이는 현상을 막기 위해 최소 크기 3px 보장)
+                // 5. 초록색 외계행성
                 ctx.beginPath();
-                ctx.arc(planetX, planetY, Math.max(3, 6 * Math.sqrt(scale/0.5)), 0, 2 * Math.PI);
+                ctx.arc(planetX, planetY, 6, 0, 2 * Math.PI);
                 ctx.fillStyle = '#1dd1a1';
                 ctx.fill();
                 ctx.strokeStyle = '#ffffff';
                 ctx.stroke();
                 
-                // 6. 실시간 속도 연산
+                // 6. 실시간 데이터 업데이트
                 let r_p = Math.sqrt(Math.pow((planetX - centerX)/scale, 2) + Math.pow((planetY - centerY)/scale, 2));
                 let v_kms = 0;
                 if (r_p > 0 && (2/r_p - 1/a) > 0) {{
@@ -250,7 +243,8 @@ with col1:
                 speedLabel.innerHTML = `<b>Speed: ${{v_kms.toFixed(2)}} km/s</b>`;
                 
                 // 7. 프레임 전진
-                let dt = T / 350; 
+                // 💡 [2번 기능 포인트] 기존 하루 변화량(dt)에 유저가 선택한 speedMultiplier 배속을 곱해줍니다.
+                let dt = (T / 350) * speedMultiplier; 
                 currentDays += dt;
                 if (currentDays >= T) currentDays = 0;
                 
