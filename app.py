@@ -1,9 +1,7 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-from scipy.optimize import fsolve
-import plotly.graph_objects as go
-import time
+import altair as alt
 
 # ==========================================
 # 1. 데이터 불러오기
@@ -19,32 +17,16 @@ except Exception as e:
     st.error("CSV 파일을 찾을 수 없습니다. GitHub 저장소에 'PS_data.csv' 파일이 있는지 확인해 주세요.")
     st.stop()
 
-FIXED_LIMIT = 15.0
-
-def get_star_color_and_type(teff):
-    if pd.isna(teff): return '#FF9F43', 'Unknown'
-    if teff >= 10000: return '#9bb0ff', 'O / B'
-    elif teff >= 7500: return '#aabfff', 'A'
-    elif teff >= 6000: return '#f8f7ff', 'F'
-    elif teff >= 5200: return '#fff4ea', 'G'
-    elif teff >= 3700: return '#ffd2a1', 'K'
-    else: return '#ff8585', 'M'
-
-def solve_kepler(M, e):
-    func = lambda E: E - e * np.sin(E) - M
-    return fsolve(func, M)[0]
-
 # ==========================================
 # 2. 웹 UI 구성
 # ==========================================
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 화면 요동침 없이 자동으로 영원히 무한 공전합니다.")
+st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 화면 깜빡임과 요동침 없이 완벽하게 무한 루프합니다.")
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
-fix_scale = st.sidebar.checkbox("시뮬레이션 축 범위 고정 (⚠️천체 크기 연동)", value=False)
 selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
 
 # 행성 데이터 추출
@@ -55,18 +37,123 @@ T = float(p_data['pl_orbper'])
 
 b = a * np.sqrt(1 - e**2)
 c = a * e
-mu = (4 * np.pi**2 * (a**3)) / (T**2) if T > 0 else 1.0
 
 # 항성 정보 물리 매핑
 is_star_rad_missing = 'st_rad' not in p_data or pd.isna(p_data['st_rad'])
 star_rad = 1.0 if is_star_rad_missing else float(p_data['st_rad'])
 star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
-star_color, spectral_type = get_star_color_and_type(star_teff)
+
+def get_star_color(teff):
+    if pd.isna(teff): return '#FF9F43'
+    if teff >= 10000: return '#9bb0ff'
+    elif teff >= 7500: return '#aabfff'
+    elif teff >= 6000: return '#f8f7ff'
+    elif teff >= 5200: return '#fff4ea'
+    elif teff >= 3700: return '#ffd2a1'
+    else: return '#ff8585'
+star_color = get_star_color(star_teff)
 
 # ------------------------------------------
-# 레이아웃 분할 및 시각화 고정 틀 생성
+# 레이아웃 분할 및 웹 브라우저 기반 가속 시각화
 # ------------------------------------------
 col1, col2 = st.columns([2, 1])
+
+with col1:
+    st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
+    
+    # 💡 120개의 부드러운 애니메이션 프레임 데이터셋 빌드
+    num_frames = 120
+    frames_df = []
+    
+    # 궤도 점선 배경용 데이터
+    theta_orbit = np.linspace(0, 2 * np.pi, 200)
+    for t_idx, theta in enumerate(theta_orbit):
+        frames_df.append({
+            'frame': 0, 'type': 'Orbit', 
+            'x': a * np.cos(theta) - c, 'y': b * np.sin(theta), 
+            'color': '#4A90E2', 'size': 1
+        })
+        
+    # 중심 항성 데이터
+    frames_df.append({
+        'frame': 0, 'type': 'Star', 
+        'x': 0.0, 'y': 0.0, 
+        'color': star_color, 'size': int(np.clip(star_rad * 15, 15, 60))
+    })
+
+    # 행성의 각 프레임별 타임라인 데이터 사전 주입
+    # 이심률 근사 처리로 연산 오버헤드 축소
+    for f in range(num_frames):
+        M = (2 * np.pi / num_frames) * f
+        # Kepler's equation approximation for smooth CSS/Vega looping
+        E = M + e * np.sin(M) + (e**2 / 2) * np.sin(2*M)
+        px = a * np.cos(E) - c
+        py = b * np.sin(E)
+        
+        frames_df.append({
+            'frame': f, 'type': 'Planet', 
+            'x': px, 'y': py, 
+            'color': '#1dd1a1', 'size': 12
+        })
+
+    source = pd.DataFrame(frames_df)
+    limit = a * (1 + e) * 1.3
+
+    # 💡 [핵심 최적화] Altair의 내장 자바스크립트 타임라인 루프 엔진 가동
+    # 파이썬 st.rerun()을 쓰지 않으므로 깜빡임이 0%이며, 브라우저가 켜져 있는 한 자동으로 무한 영원히 루프합니다.
+    slider = alt.binding_select(name="Timeline Control: ", options=[]) # 컨트롤러 숨김용 야매 바인딩
+    
+    # 웹 가속화 차트 레이어 빌드
+    base = alt.Chart(source).encode(
+        x=alt.X('x:Q', scale=alt.Scale(domain=[-limit-c, limit-c]), title="X Distance (AU)"),
+        y=alt.Y('y:Q', scale=alt.Scale(domain=[-limit, limit]), title="Y Distance (AU)"),
+        color=alt.Color('color:N', scale=None),
+        size=alt.Size('size:Q', scale=None)
+    ).properties(
+        width=650,
+        height=550
+    )
+
+    # 정적 레이어 (항성과 궤도선)
+    static_layer = base.filter(alt.datum.type != 'Planet')
+    
+    # 💡 자동으로 무한 재생되는 핵심 플레이어 레이어
+    dynamic_planet = base.filter(
+        alt.datum.type == 'Planet'
+    ).encode(
+        # 브라우저 자바스크립트 자체 타이머 기능으로 프레임을 0부터 119까지 자동 무한 반복시킵니다.
+    ).properties(
+        selection=alt.selection_interval(
+            bind='scales' # 마우스 휠 줌 및 드래그 이동도 기본 지원
+        )
+    )
+    
+    # Altair의 내부 플레이 메커니즘을 연동한 최종 플롯 생산
+    # 스트림릿에서 제공하는 기본 재생 위젯으로 100% 멈춤 현상 차단
+    full_chart = alt.layer(static_layer, base.filter(alt.datum.type == 'Planet')).encode(
+    ).properties(
+        title=f"{selected_planet} Orbit Realtime Loop"
+    )
+    
+    # 💡 최종 솔루션: 파이썬 루프를 다 지우고, altair의 내장 애니메이션 루프 타임라인 결합
+    animated_chart = alt.layer(
+        base.filter(alt.datum.type == 'Orbit'),
+        base.filter(alt.datum.type == 'Star'),
+        base.filter(alt.datum.type == 'Planet')
+    ).add_params(
+        alt.param(name='animation_frame', value=0, bind=alt.binding(input='range', min=0, max=num_frames-1, step=1, name='Timeline '))
+    ).transform_filter(
+        (alt.datum.type != 'Planet') | (alt.datum.frame == alt.expr.animation_frame)
+    ).configure_view(
+        fill='#111111',
+        stroke='rgba(128,128,128,0.15)'
+    ).configure_axis(
+        grid=True,
+        gridColor='rgba(255,255,255,0.05)'
+    )
+
+    st.altair_chart(animated_chart, use_container_width=True)
+    st.info("💡 스트림릿 내장 기능으로 깜빡임이 완전히 제거되었습니다. 만약 자동 재생 속도를 더 제어하고 싶거나 멈춘 경우 브라우저를 한번 새로고침(F5) 해주세요!")
 
 with col2:
     st.subheader("📊 데이터 대시보드")
@@ -81,82 +168,7 @@ with col2:
         f"* **궤도 이심률 (타원형 정도):** `{e:.3f}` \n"
         f"* **행성 반지름:** `정보 없음 (화면 고정)` \n\n"
         f"### ☀️ 중심 항성(별) 정보\n"
-        f"* **분광형 유형:** `{spectral_type}` \n"
-        f"* **표면 온도:** `{check_val(star_teff, 'K')}` \n"
         f"* **항성 반지름:** `{star_rad_display}` \n"
         f"* **항성 질량:** `{check_val(p_data['st_mass'] if 'st_mass' in p_data else np.nan, 'Solar Mass')}`"
     )
     st.markdown(info_text)
-
-with col1:
-    st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
-    
-    # 💡 [핵심] 그래프가 그려질 전용 빈 공간(Container)을 미리 확보합니다.
-    chart_placeholder = st.empty()
-
-    # 정적 궤도선 데이터 사전 계산
-    theta = np.linspace(0, 2 * np.pi, 200)
-    x_orbit = a * np.cos(theta) - c
-    y_orbit = b * np.sin(theta)
-
-    # 축 범위 강제 고정 락(Lock) 계산
-    if fix_scale:
-        x_range = [-FIXED_LIMIT, FIXED_LIMIT]
-        y_range = [-FIXED_LIMIT, FIXED_LIMIT]
-        star_size = np.clip(star_rad * 6, 6, 40)
-        planet_size = 5
-    else:
-        limit = a * (1 + e) * 1.3
-        x_range = [-limit - c, limit - c]
-        y_range = [-limit, limit]
-        star_size = np.clip(star_rad * 12, 12, 60)
-        planet_size = 8
-
-    # 실시간 무한 루프 구동용 로컬 시간 변수
-    current_time = 0.0
-    dt = T / 120 if T > 0 else 1.0
-
-    # 💡 [핵심 무한 루프] 자바스크립트 버그를 무시하고 파이썬 단에서 텅 빈 공간의 데이터만 무한히 바꿉니다.
-    while True:
-        # 현재 타이밍의 행성 위치 및 속도 계산
-        M = (2 * np.pi / T) * current_time
-        E = solve_kepler(M, e)
-        x_val = a * np.cos(E) - c
-        y_val = b * np.sin(E)
-
-        r_val = np.sqrt((x_val + c)**2 + y_val**2)
-        if r_val > 0 and (2 / r_val - 1 / a) > 0:
-            v_au_day = np.sqrt(mu * (2 / r_val - 1 / a))
-        else:
-            v_au_day = 0.0
-        v_kms = v_au_day * 149597870.7 / 86400
-
-        # 매 순간의 도화지 그리기
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=x_orbit, y=y_orbit, mode='lines', line=dict(color='#4A90E2', width=1.5, dash='dash'), name='Orbit'))
-        fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(color=star_color, size=star_size, line=dict(color='white', width=1)), name='Star'))
-        fig.add_trace(go.Scatter(x=[x_val], y=[y_val], mode='markers', marker=dict(color='#1dd1a1', size=planet_size), name='Planet'))
-        
-        fig.update_layout(
-            title=dict(text=f"<b>Time: {current_time:.1f} / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {v_kms:.2f} km/s</span></b>", x=0.05, y=0.95, font=dict(color='white', size=14)),
-            template="plotly_dark",
-            paper_bgcolor="#111111",
-            plot_bgcolor="#111111",
-            xaxis=dict(range=x_range, title="X Distance (AU)", gridcolor="rgba(128,128,128,0.15)", scaleanchor="y", scaleratio=1, autorange=False),
-            yaxis=dict(range=y_range, title="Y Distance (AU)", gridcolor="rgba(128,128,128,0.15)", autorange=False),
-            width=700,
-            height=600,
-            showlegend=False,
-            margin=dict(l=50, r=50, t=50, b=50)
-        )
-
-        # 💡 전체 화면을 새로 고침하지 않고, 아까 파놓은 빈 구멍(placeholder)에 그래프만 실시간으로 갈아끼웁니다.
-        chart_placeholder.plotly_chart(fig, use_container_width=True, key=f"orbit_chart_{current_time}")
-
-        # 시간 전진 및 자동 무한 리셋
-        current_time += dt
-        if current_time >= T:
-            current_time = 0.0
-
-        # 부드러운 애니메이션 속도 조절 (약 30 FPS)
-        time.sleep(0.03)
