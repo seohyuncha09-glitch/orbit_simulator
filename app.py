@@ -22,15 +22,25 @@ except Exception as e:
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 제어 패널의 다양한 가이드선을 켜서 우주의 법칙을 탐구해 보세요.")
+st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 제어 패널의 슬라이더를 사용해 궤도를 확대하거나 축소할 수 있습니다.")
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
 selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
 
-# [기능 제어 체크박스들]
+# [기능 제어 컴포넌트들]
 show_earth_orbit = st.sidebar.checkbox("🌍 지구 궤도 비교선 표시 (1.0 AU)", value=False)
 show_habitable_zone = st.sidebar.checkbox("🟢 골디락스 존 표시 (생명체 거주 구역)", value=False)
+
+# 💡 [2번 줌 기능 추가] 행성 궤도 크기에 종속되는 배율 슬라이더 (0.2배 ~ 5.0배)
+zoom_multiplier = st.sidebar.slider(
+    "🔍 궤도 시야 줌 조절 (배율)",
+    min_value=0.2,
+    max_value=5.0,
+    value=1.0,
+    step=0.1,
+    help="1.0이 기본 시야이며, 숫자가 커질수록 항성 중심을 확대(줌인)합니다."
+)
 
 # 행성 데이터 추출
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
@@ -42,12 +52,11 @@ b = a * np.sqrt(1 - e**2)
 c = a * e
 mu = (4 * np.pi**2 * (a**3)) / (T**2) if T > 0 else 1.0
 
-# 항성 정보 및 골디락스 존(HZ) 물리적 범위 연산
+# 항성 정보 및 골디락스 존(HZ) 범위 연산
 is_star_rad_missing = 'st_rad' not in p_data or pd.isna(p_data['st_rad'])
 star_rad = 1.0 if is_star_rad_missing else float(p_data['st_rad'])
 star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
 
-# 항성 질량을 기준으로 간이 골디락스 존 (안쪽, 바깥쪽 AU) 계산
 star_mass = float(p_data['st_mass']) if 'st_mass' in p_data and not pd.isna(p_data['st_mass']) else 1.0
 hz_inner = 0.75 * np.sqrt(star_mass)
 hz_outer = 1.77 * np.sqrt(star_mass)
@@ -63,7 +72,7 @@ def get_star_color(teff):
 star_color = get_star_color(star_teff)
 
 # ------------------------------------------
-# 레이아웃 분할 및 웹 브라우저 기반 가속 시각화
+# 레이아웃 분할 및 시각화
 # ------------------------------------------
 col1, col2 = st.columns([2, 1])
 
@@ -149,7 +158,12 @@ with col1:
             const plotWidth = canvas.width - (paddingLeft + paddingRight);
             const plotHeight = canvas.height - (paddingTop + paddingBottom);
             
-            const limit = (a + c) * 1.3;
+            // 기본 한계 범위를 구한 뒤
+            const baseLimit = (a + c) * 1.3;
+            
+            // 💡 [2번 줌 기능 포인트] 스트림릿에서 전달받은 zoom_multiplier 수치에 맞춰 시야 경계(limit)를 역으로 나눠줍니다.
+            // 배율이 2배(줌인)가 되면 limit은 절반으로 줄어들어 격자와 천체들이 2배 커지게 보입니다.
+            const limit = baseLimit / {zoom_multiplier};
             const scale = Math.min(plotWidth, plotHeight) / (2 * limit);
             
             const centerX = paddingLeft + (plotWidth / 2) - (plotWidth * 0.15);
@@ -274,7 +288,7 @@ with col1:
                     ctx.restore();
                 }}
 
-                // 2. 푸른색 외계행성 공전 궤도선
+                // 푸른색 외계행성 공전 궤도선
                 ctx.save();
                 ctx.translate(centerX + (c * scale), centerY);
                 ctx.strokeStyle = '#4A90E2';
@@ -285,9 +299,9 @@ with col1:
                 ctx.stroke();
                 ctx.restore();
                 
-                // 3. 중심 항성 (태양)
+                // 중심 항성 (태양) - 항성 크기도 스케일에 연동
                 ctx.beginPath();
-                ctx.arc(centerX, centerY, Math.max(6, Math.min({star_rad} * 10, 28)), 0, 2 * Math.PI);
+                ctx.arc(centerX, centerY, Math.max(6, Math.min({star_rad} * 10 * {zoom_multiplier}, 60)), 0, 2 * Math.PI);
                 ctx.fillStyle = starColor;
                 ctx.shadowColor = starColor;
                 ctx.shadowBlur = 12;
@@ -297,14 +311,14 @@ with col1:
                 ctx.lineWidth = 1;
                 ctx.stroke();
                 
-                // 4. 행성 위치 연산
+                // 행성 위치 연산
                 let M_val = (2 * Math.PI / T) * currentDays;
                 let E = M_val + e * Math.sin(M_val) + (e*e/2) * Math.sin(2*M_val);
                 
                 let planetX = centerX + (c * scale) + (a * scale * Math.cos(E));
                 let planetY = centerY + (b * scale * Math.sin(E));
                 
-                // 5. 초록색 외계행성
+                // 초록색 외계행성
                 ctx.beginPath();
                 ctx.arc(planetX, planetY, 6, 0, 2 * Math.PI);
                 ctx.fillStyle = '#1dd1a1';
@@ -312,7 +326,7 @@ with col1:
                 ctx.strokeStyle = '#ffffff';
                 ctx.stroke();
                 
-                // 6. 실시간 데이터 업데이트
+                // 실시간 데이터 업데이트
                 let r_p = Math.sqrt(Math.pow((planetX - centerX)/scale, 2) + Math.pow((planetY - centerY)/scale, 2));
                 let v_kms = 0;
                 if (r_p > 0 && (2/r_p - 1/a) > 0) {{
@@ -323,7 +337,7 @@ with col1:
                 timeLabel.innerHTML = `<b>Time: ${{currentDays.toFixed(1)}} / ${{T.toFixed(1)}} days</b>`;
                 speedLabel.innerHTML = `<b>Speed: ${{v_kms.toFixed(2)}} km/s</b>`;
                 
-                // 7. 프레임 전진
+                // 프레임 전진
                 let dt = (T / 350) * speedMultiplier; 
                 currentDays += dt;
                 if (currentDays >= T) currentDays = 0;
