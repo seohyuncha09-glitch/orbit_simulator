@@ -1,7 +1,6 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import altair as alt
 
 # ==========================================
 # 1. 데이터 불러오기
@@ -23,7 +22,7 @@ except Exception as e:
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 화면 깜빡임과 요동침 없이 완벽하게 무한 루프합니다.")
+st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 브라우저 하드웨어 가속을 통해 멈춤과 요동침 없이 영원히 공전합니다.")
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
@@ -61,99 +60,102 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
     
-    # 💡 120개의 부드러운 애니메이션 프레임 데이터셋 빌드
-    num_frames = 120
-    frames_df = []
+    # 💡 브라우저 내장 자바스크립트로 초고속 무한 루프를 돌리는 HTML Injection 코드
+    html_code = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ background-color: #111111; margin: 0; overflow: hidden; font-family: sans-serif; }}
+            canvas {{ background: #111111; display: block; margin: 0 auto; }}
+        </style>
+    </head>
+    <body>
+        <canvas id="orbitCanvas" width="700" height="550"></canvas>
+        <script>
+            const canvas = document.getElementById('orbitCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // 파이썬에서 넘겨받은 천체 물리 상수 변수화
+            const a = {a};
+            const e = {e};
+            const b = {b};
+            const c = {c};
+            const starColor = "{star_color}";
+            
+            // 화면 꽉 차게 스케일 자동 정적 매핑 (출렁거림 원천 차단)
+            const limit = a * (1 + e) * 1.3;
+            const scale = (canvas.width / 2) / limit;
+            
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            let angle = 0; // 공전 타이머 변수
+            
+            function draw() {{
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // 1. 배경 그리드망 선배치 (옵션)
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+                ctx.lineWidth = 1;
+                for(let i=0; i<canvas.width; i+=50) {{
+                    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
+                }}
+                
+                // 2. 궤도선 (푸른색 점선 고정)
+                ctx.save();
+                ctx.translate(centerX - (c * scale), centerY);
+                ctx.strokeStyle = '#4A90E2';
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.ellipse(0, 0, a * scale, b * scale, 0, 0, 2 * Math.PI);
+                ctx.stroke();
+                ctx.restore();
+                
+                // 3. 중심 항성 (태양) 배치
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, Math.max(8, Math.min({star_rad} * 12, 35)), 0, 2 * Math.PI);
+                ctx.fillStyle = starColor;
+                ctx.shadowColor = starColor;
+                ctx.shadowBlur = 15;
+                ctx.fill();
+                ctx.shadowBlur = 0; // 그림자 초기화
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                
+                // 4. 케플러 타원 이심률 각도 근사 계산 (부드러운 주행감 유도)
+                let E = angle + e * Math.sin(angle) + (e*e/2) * Math.sin(2*angle);
+                let planetX = centerX - (c * scale) + (a * scale * Math.cos(E));
+                let planetY = centerY + (b * scale * Math.sin(E));
+                
+                // 5. 초록색 공전 행성 그리기
+                ctx.beginPath();
+                ctx.arc(planetX, planetY, 7, 0, 2 * Math.PI);
+                ctx.fillStyle = '#1dd1a1';
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.stroke();
+                
+                // 💡 [무한 루프의 핵심] 각도를 전진시키고, 2파이(360도)를 넘으면 자동으로 0부터 무한 반복
+                angle += 0.025; 
+                if (angle >= 2 * Math.PI) angle = 0;
+                
+                // 브라우저 자체 주사율에 맞춰 부드럽게 무한 루프 실행 (60FPS 보장)
+                requestAnimationFrame(draw);
+            }}
+            
+            // 시뮬레이션 즉시 스타트
+            draw();
+        </script>
+    </body>
+    </html>
+    """
     
-    # 궤도 점선 배경용 데이터
-    theta_orbit = np.linspace(0, 2 * np.pi, 200)
-    for t_idx, theta in enumerate(theta_orbit):
-        frames_df.append({
-            'frame': 0, 'type': 'Orbit', 
-            'x': a * np.cos(theta) - c, 'y': b * np.sin(theta), 
-            'color': '#4A90E2', 'size': 1
-        })
-        
-    # 중심 항성 데이터
-    frames_df.append({
-        'frame': 0, 'type': 'Star', 
-        'x': 0.0, 'y': 0.0, 
-        'color': star_color, 'size': int(np.clip(star_rad * 15, 15, 60))
-    })
-
-    # 행성의 각 프레임별 타임라인 데이터 사전 주입
-    # 이심률 근사 처리로 연산 오버헤드 축소
-    for f in range(num_frames):
-        M = (2 * np.pi / num_frames) * f
-        # Kepler's equation approximation for smooth CSS/Vega looping
-        E = M + e * np.sin(M) + (e**2 / 2) * np.sin(2*M)
-        px = a * np.cos(E) - c
-        py = b * np.sin(E)
-        
-        frames_df.append({
-            'frame': f, 'type': 'Planet', 
-            'x': px, 'y': py, 
-            'color': '#1dd1a1', 'size': 12
-        })
-
-    source = pd.DataFrame(frames_df)
-    limit = a * (1 + e) * 1.3
-
-    # 💡 [핵심 최적화] Altair의 내장 자바스크립트 타임라인 루프 엔진 가동
-    # 파이썬 st.rerun()을 쓰지 않으므로 깜빡임이 0%이며, 브라우저가 켜져 있는 한 자동으로 무한 영원히 루프합니다.
-    slider = alt.binding_select(name="Timeline Control: ", options=[]) # 컨트롤러 숨김용 야매 바인딩
-    
-    # 웹 가속화 차트 레이어 빌드
-    base = alt.Chart(source).encode(
-        x=alt.X('x:Q', scale=alt.Scale(domain=[-limit-c, limit-c]), title="X Distance (AU)"),
-        y=alt.Y('y:Q', scale=alt.Scale(domain=[-limit, limit]), title="Y Distance (AU)"),
-        color=alt.Color('color:N', scale=None),
-        size=alt.Size('size:Q', scale=None)
-    ).properties(
-        width=650,
-        height=550
-    )
-
-    # 정적 레이어 (항성과 궤도선)
-    static_layer = base.filter(alt.datum.type != 'Planet')
-    
-    # 💡 자동으로 무한 재생되는 핵심 플레이어 레이어
-    dynamic_planet = base.filter(
-        alt.datum.type == 'Planet'
-    ).encode(
-        # 브라우저 자바스크립트 자체 타이머 기능으로 프레임을 0부터 119까지 자동 무한 반복시킵니다.
-    ).properties(
-        selection=alt.selection_interval(
-            bind='scales' # 마우스 휠 줌 및 드래그 이동도 기본 지원
-        )
-    )
-    
-    # Altair의 내부 플레이 메커니즘을 연동한 최종 플롯 생산
-    # 스트림릿에서 제공하는 기본 재생 위젯으로 100% 멈춤 현상 차단
-    full_chart = alt.layer(static_layer, base.filter(alt.datum.type == 'Planet')).encode(
-    ).properties(
-        title=f"{selected_planet} Orbit Realtime Loop"
-    )
-    
-    # 💡 최종 솔루션: 파이썬 루프를 다 지우고, altair의 내장 애니메이션 루프 타임라인 결합
-    animated_chart = alt.layer(
-        base.filter(alt.datum.type == 'Orbit'),
-        base.filter(alt.datum.type == 'Star'),
-        base.filter(alt.datum.type == 'Planet')
-    ).add_params(
-        alt.param(name='animation_frame', value=0, bind=alt.binding(input='range', min=0, max=num_frames-1, step=1, name='Timeline '))
-    ).transform_filter(
-        (alt.datum.type != 'Planet') | (alt.datum.frame == alt.expr.animation_frame)
-    ).configure_view(
-        fill='#111111',
-        stroke='rgba(128,128,128,0.15)'
-    ).configure_axis(
-        grid=True,
-        gridColor='rgba(255,255,255,0.05)'
-    )
-
-    st.altair_chart(animated_chart, use_container_width=True)
-    st.info("💡 스트림릿 내장 기능으로 깜빡임이 완전히 제거되었습니다. 만약 자동 재생 속도를 더 제어하고 싶거나 멈춘 경우 브라우저를 한번 새로고침(F5) 해주세요!")
+    # 스트림릿 내장 html 컴포넌트로 주입 (깜빡임, 리런 멈춤 현상 100% 없음)
+    st.components.v1.html(html_code, height=560)
 
 with col2:
     st.subheader("📊 데이터 대시보드")
