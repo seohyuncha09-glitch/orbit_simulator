@@ -55,7 +55,7 @@ def solve_kepler(M, e):
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("정밀 가공된 NASA 아카이브 데이터를 기반으로 구동되는 부하 제로 시뮬레이터입니다.")
+st.markdown("정밀 가공된 NASA 아카이브 데이터를 기반으로 구동되는 시뮬레이터입니다.")
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
@@ -77,35 +77,27 @@ star_teff = float(p_data['st_teff'])
 star_mass = float(p_data['st_mass'])
 star_color, spectral_type = get_star_color_and_type(star_teff)
 
-# 모든 프레임 위치 및 속도 계산
-num_frames = 120
-times = np.linspace(0, T, num_frames)
+# 💡 [버그 원천 차단] 복잡한 Plotly 내장 애니메이션 대신 Streamlit 슬라이더로 상호작용 구현
+st.sidebar.markdown("---")
+st.sidebar.subheader("🏃 궤도 시점 제어")
+current_day = st.sidebar.slider("진행 시간 (일)", min_value=0.0, max_value=T, value=0.0, step=max(0.1, T/100))
 
-x_coords = []
-y_coords = []
-speeds = []
+# 현재 시점의 행성 위치 및 속도 계산
+M_curr = (2 * np.pi / T) * current_day
+E_curr = solve_kepler(M_curr, e)
+x_curr = float(a * np.cos(E_curr) - c)
+y_curr = float(b * np.sin(E_curr))
 
-for t in times:
-    M = (2 * np.pi / T) * t
-    E = solve_kepler(M, e)
-    x_val = a * np.cos(E) - c
-    y_val = b * np.sin(E)
-    x_coords.append(x_val)
-    y_coords.append(y_val)
-    
-    r_val = np.sqrt((x_val + c)**2 + y_val**2)
-    v_au_day = np.sqrt(mu * (2 / r_val - 1 / a)) if r_val > 0 else 0.0
-    v_kms = v_au_day * 149597870.7 / 86400
-    speeds.append(v_kms)
+r_curr = np.sqrt((x_curr + c)**2 + y_curr**2)
+v_au_day = np.sqrt(mu * (2 / r_curr - 1 / a)) if r_curr > 0 else 0.0
+v_kms = v_au_day * 149597870.7 / 86400
 
-# 정적 궤도선 데이터
+# 정적 궤도선 데이터 고정 생성
 theta = np.linspace(0, 2 * np.pi, 200)
 x_orbit = a * np.cos(theta) - c
 y_orbit = b * np.sin(theta)
 
-# 크기 고정화 (안전한 상수값 적용)
 star_size = np.clip(star_rad * 12, 10, 50)
-planet_size = 8
 
 # ------------------------------------------
 # 레이아웃 분할 및 시각화
@@ -113,77 +105,28 @@ planet_size = 8
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
+    st.subheader(f"✨ {selected_planet} 궤도 실시간 플롯")
     
+    # 메인 그래픽스 객체 바인딩
     fig = go.Figure()
     
-    # 기본 레이어 추가
+    # 1. 궤도선
     fig.add_trace(go.Scatter(x=x_orbit, y=y_orbit, mode='lines', line=dict(color='#4A90E2', width=1.5, dash='dash'), name='Orbit'))
+    # 2. 중심 항성
     fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(color=star_color, size=star_size, line=dict(color='white', width=0.5)), name='Star'))
-    fig.add_trace(go.Scatter(x=[x_coords[0]], y=[y_coords[0]], mode='markers', marker=dict(color='#1dd1a1', size=planet_size), name='Planet'))
+    # 3. 현재 시점의 행성 위치
+    fig.add_trace(go.Scatter(x=[x_curr], y=[y_curr], mode='markers', marker=dict(color='#1dd1a1', size=10), name='Planet'))
     
-    # 프레임 데이터 구축
-    frames_list = []
-    for i in range(num_frames):
-        frame_data = [
-            go.Scatter(x=x_orbit, y=y_orbit),
-            go.Scatter(x=[0], y=[0]),
-            go.Scatter(x=[x_coords[i]], y=[y_coords[i]])
-        ]
-        frames_list.append(go.Frame(data=frame_data, name=f"frame{i}"))
-        
-    fig.frames = frames_list
-    
-    # 버튼 및 컨트롤러 구성
-    play_button = dict(
-        label="▶ Play", 
-        method="animate", 
-        args=[None, {"frame": {"duration": 25, "redraw": False}, "fromcurrent": True, "transition": {"duration": 0}, "loop": True}]
-    )
-    pause_button = dict(
-        label="⏸ Pause", 
-        method="animate", 
-        args=[[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}]
-    )
-    
-    menu_dict = dict(
-        type="buttons", direction="left", showactive=False,
-        x=0.05, xanchor="left", y=-0.1, yanchor="top",
-        buttons=[play_button, pause_button]
-    )
-    
-    steps_list = []
-    for i in range(num_frames):
-        step = {
-            "args": [[f"frame{i}"], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}],
-            "label": f"{times[i]:.1f}d",
-            "method": "animate"
-        }
-        steps_list.append(step)
-        
-    slider_dict = dict(
-        active=0, yanchor="top", xanchor="left",
-        currentvalue={"font": {"size": 13, "color": "#1dd1a1"}, "prefix": "Orbital Status — ", "visible": True, "xanchor": "left"},
-        transition={"duration": 0}, pad={"b": 10, "t": 40}, len=0.9, x=0.05, y=-0.12,
-        steps=steps_list
-    )
-    
-    # 💡 [해결 핵심] 에러를 내던 수동 range 설정을 완전히 빼버리고 Plotly 자율 매핑에 맡깁니다.
-    layout_config = {
-        "title": {"text": f"<b>🪐 {selected_planet} Orbit (Period: {T:.1f} days)</b>", "x": 0.05, "y": 0.95, "font": {"color": "white", "size": 15}},
-        "template": "plotly_dark",
-        "paper_bgcolor": "#111111",
-        "plot_bgcolor": "#111111",
-        "xaxis": {"title": "X Distance (AU)", "gridcolor": "rgba(128,128,128,0.15)", "showzeroline": False},
-        "yaxis": {"title": "Y Distance (AU)", "gridcolor": "rgba(128,128,128,0.15)", "showzeroline": False},
-        "width": 650,   
-        "height": 650,
-        "showlegend": False,
-        "updatemenus": [menu_dict],
-        "sliders": [slider_dict]
-    }
-    
-    fig.layout = layout_config
+    # 💡 에러를 내뿜던 복잡한 슬라이더/메뉴 속성을 전부 배제하고, 순수한 레이아웃 옵션만 안전하게 주입
+    fig.layout.title = f"<b>🪐 {selected_planet} (Day: {current_day:.1f} / {T:.1f}) | Speed: {v_kms:.2f} km/s</b>"
+    fig.layout.template = "plotly_dark"
+    fig.layout.paper_bgcolor = "#111111"
+    fig.layout.plot_bgcolor = "#111111"
+    fig.layout.xaxis = dict(title="X Distance (AU)", gridcolor="rgba(128,128,128,0.15)", showzeroline=False)
+    fig.layout.yaxis = dict(title="Y Distance (AU)", gridcolor="rgba(128,128,128,0.15)", showzeroline=False)
+    fig.layout.width = 650
+    fig.layout.height = 650
+    fig.layout.showlegend = False
     
     st.plotly_chart(fig, use_container_width=True)
 
@@ -196,7 +139,7 @@ with col2:
         f"* **공전 주기:** `{T:.1f} 일` \n"
         f"* **궤도 장반경 (거리):** `{a:.3f} AU` \n"
         f"* **궤도 이심률 (타원형 정도):** `{e:.3f}` \n"
-        f"* **행성 반지름:** `정보 없음 (화면 고정)` \n\n"
+        f"* **현재 실시간 공전 속도:** `{v_kms:.2f} km/s` \n\n"
         f"### ☀️ 중심 항성(별) 정보\n"
         f"* **분광형 유형:** `{spectral_type}` \n"
         f"* **표면 온도:** `{star_teff:.1f} K` \n"
