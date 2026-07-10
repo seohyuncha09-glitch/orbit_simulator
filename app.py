@@ -49,24 +49,11 @@ star_rad = 1.0 if is_star_rad_missing else float(p_data['st_rad'])
 star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
 star_mass = float(p_data['st_mass']) if 'st_mass' in p_data and not pd.isna(p_data['st_mass']) else 1.0
 
-# ==========================================
-# [수정] 항성의 실제 광도를 반영한 골디락스 존 계산
-# ==========================================
-# 1. 광도(L) 구하기 (태양 광도 기준 배율)
-if 'st_lum' in p_data and not pd.isna(p_data['st_lum']):
-    # 아카이브에 광도 데이터가 직접 존재하는 경우 (log10 형태가 아닐 때)
-    star_lum = 10**float(p_data['st_lum']) if 'log' in str(df['st_lum'].dtype) else float(p_data['st_lum'])
-elif not pd.isna(star_rad) and not pd.isna(star_teff):
-    # 반지름과 표면온도로 광도 유도 (L = R^2 * (T/T_sun)^4)
-    # 태양 표면온도 = 5778 K
-    star_lum = (star_rad**2) * ((star_teff / 5778)**4)
-else:
-    # 데이터가 아예 없으면 항성 질량을 이용해 약식 추정 (주계열성 L ~ M^3.5)
-    star_lum = star_mass**3.5
+# 골디락스 존(HZ) 범위
 
-# 2. 광도의 제곱근을 기반으로 정밀한 골디락스 존(HZ) 범위 계산
-hz_inner = 0.75 * np.sqrt(star_lum)
-hz_outer = 1.77 * np.sqrt(star_lum)
+hz_inner = 0.75 * np.sqrt(star_mass)
+
+hz_outer = 1.77 * np.sqrt(star_mass)
 
 def get_star_info(teff):
     if pd.isna(teff): return '#FF9F43', '정보 없음'
