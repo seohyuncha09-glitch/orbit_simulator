@@ -5,26 +5,44 @@ from scipy.optimize import fsolve
 import plotly.graph_objects as go
 
 # ==========================================
-# 1. 데이터 불러오기
+# 1. 데이터 불러오기 및 불완전 데이터 원천 배제
 # ==========================================
 @st.cache_data
 def load_data():
-    return pd.read_csv("PS_data.csv")
+    df_raw = pd.read_csv("PS_data.csv")
+    
+    # 💡 [핵심 해결책] 연산과 UI 렌더링에 꼭 필요한 5대 핵심 물리량 검사
+    # 하나라도 NaN(결측치)이거나 0 이하인 불완전한 행성은 가차없이 버립니다.
+    required_cols = ['pl_orbsmax', 'pl_orbper', 'pl_orbeccen', 'st_rad', 'st_teff']
+    
+    # 1) 필수 컬럼이 데이터셋에 존재하는지 확인 후 필터링
+    for col in required_cols:
+        if col in df_raw.columns:
+            df_raw = df_raw[df_raw[col].notna()]
+            
+    # 2) 물리적으로 불가능한 수치(음수 등) 제거
+    df_raw = df_raw[df_raw['pl_orbsmax'] > 0]
+    df_raw = df_raw[df_raw['pl_orbper'] > 0]
+    df_raw = df_raw[df_raw['st_rad'] > 0]
+    df_raw = df_raw[df_raw['st_teff'] > 0]
+    
+    return df_raw
 
 try:
     df = load_data()
-    # 데이터가 아예 없거나 잘못된 행성 사전 필터링 (장반경과 주기가 필수)
-    df = df[df['pl_orbsmax'].notna() & (df['pl_orbsmax'] > 0)]
-    df = df[df['pl_orbper'].notna() & (df['pl_orbper'] > 0)]
     all_planet_names = sorted(df['pl_name'].dropna().unique())
 except Exception as e:
-    st.error("CSV 파일을 찾을 수 없거나 데이터 구조에 문제가 있습니다.")
+    st.error("CSV 파일을 찾을 수 없거나 데이터 필터링 중 오류가 발생했습니다.")
+    st.stop()
+
+# 만약 필터링 후 데이터가 하나도 없다면 안전장치
+if not all_planet_names:
+    st.error("⚠️ 필터링 조건에 맞는 완전한 데이터가 전무합니다. CSV 파일을 확인해 주세요.")
     st.stop()
 
 FIXED_LIMIT = 15.0
 
 def get_star_color_and_type(teff):
-    if pd.isna(teff) or np.isnan(teff): return '#FF9F43', 'Unknown'
     if teff >= 10000: return '#9bb0ff', 'O / B'
     elif teff >= 7500: return '#aabfff', 'A'
     elif teff >= 6000: return '#f8f7ff', 'F'
@@ -42,30 +60,28 @@ def solve_kepler(M, e):
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 브라우저 자체 애니메이션 렌더링을 적용해 부하를 최소화한 버전입니다.")
+st.markdown("정밀 가공된 NASA 아카이브 데이터를 기반으로 구동되는 부하 제로 시뮬레이터입니다.")
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
 fix_scale = st.sidebar.checkbox("시뮬레이션 축 범위 고정 (⚠️천체 크기 연동)", value=False)
 selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
 
-# 행성 데이터 추출 및 안전한 형변환
+# 행성 데이터 추출 (이미 완벽함이 검증된 데이터)
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
 
-a = float(p_data['pl_orbsmax']) if not pd.isna(p_data['pl_orbsmax']) else 1.0
-e = float(p_data['pl_orbeccen']) if not pd.isna(p_data['pl_orbeccen']) else 0.0
-T = float(p_data['pl_orbper']) if not pd.isna(p_data['pl_orbper']) else 365.0
+a = float(p_data['pl_orbsmax'])
+e = float(p_data['pl_orbeccen'])
+T = float(p_data['pl_orbper'])
 
-# 물리 상수 계산 안전화
-if e >= 1.0 or e < 0: e = 0.0  # 탈출 궤도나 이상 이심률 방지
+# 타원 기하학 연산
 b = a * np.sqrt(1 - e**2)
 c = a * e
-mu = (4 * np.pi**2 * (a**3)) / (T**2) if T > 0 else 1.0
+mu = (4 * np.pi**2 * (a**3)) / (T**2)
 
-# 항성 정보 물리 매핑
-is_star_rad_missing = 'st_rad' not in p_data or pd.isna(p_data['st_rad'])
-star_rad = 1.0 if is_star_rad_missing else float(p_data['st_rad'])
-star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
+# 항성 정보 매핑
+star_rad = float(p_data['st_rad'])
+star_teff = float(p_data['st_teff'])
 star_color, spectral_type = get_star_color_and_type(star_teff)
 
 # ------------------------------------------
@@ -87,26 +103,16 @@ for t in times:
     y_coords.append(y_val)
     
     r_val = np.sqrt((x_val + c)**2 + y_val**2)
-    
-    if r_val > 0.001 and (2 / r_val - 1 / a) > 0:
-        v_au_day = np.sqrt(mu * (2 / r_val - 1 / a))
-    else:
-        v_au_day = 0.0
-        
+    v_au_day = np.sqrt(mu * (2 / r_val - 1 / a)) if r_val > 0 else 0.0
     v_kms = v_au_day * 149597870.7 / 86400
-    if np.isnan(v_kms) or np.isinf(v_kms):
-        v_kms = 0.0
     speeds.append(v_kms)
-
-if not speeds:
-    speeds = [0.0] * num_frames
 
 # 정적 궤도선 데이터
 theta = np.linspace(0, 2 * np.pi, 200)
 x_orbit = a * np.cos(theta) - c
 y_orbit = b * np.sin(theta)
 
-# 💡 [핵심 해결책] 축 범위 계산 시 NaN 발생을 완벽하게 방지하는 방어 로직
+# 크기 및 축 범위 매핑
 if fix_scale:
     x_range = [-FIXED_LIMIT, FIXED_LIMIT]
     y_range = [-FIXED_LIMIT, FIXED_LIMIT]
@@ -114,18 +120,10 @@ if fix_scale:
     planet_size = 5
 else:
     limit = a * 1.3
-    # 만약 계산된 limit이 올바르지 않다면 기본 범위 지정
-    if np.isnan(limit) or np.isinf(limit) or limit <= 0:
-        limit = 5.0
-    
     x_range = [float(-limit - c), float(limit - c)]
     y_range = [float(-limit), float(limit)]
     star_size = np.clip(star_rad * 12, 10, 60)
     planet_size = 8
-
-# 최종 범위 값 재검증 (안전장치)
-if np.isnan(x_range[0]) or np.isnan(x_range[1]): x_range = [-2.0, 2.0]
-if np.isnan(y_range[0]) or np.isnan(y_range[1]): y_range = [-2.0, 2.0]
 
 # ------------------------------------------
 # 레이아웃 분할 및 시각화
@@ -158,7 +156,7 @@ with col1:
         
     fig.frames = frames_list
     
-    # 버튼 컨트롤러 설정
+    # 버튼 및 컨트롤러 딕셔너리 정돈
     play_button = {
         "label": "▶ Play", 
         "method": "animate", 
@@ -197,10 +195,9 @@ with col1:
         "steps": steps_list
     }
     
-    initial_speed = speeds[0] if len(speeds) > 0 else 0.0
-    
+    # 💡 갱신 레이아웃 속성을 완전히 고정값 형태로 주입
     fig.update_layout(
-        title=dict(text=f"<b>Time: 0.0 / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {initial_speed:.2f} km/s</span></b>", x=0.05, y=0.95, font=dict(color='white', size=14)),
+        title=dict(text=f"<b>Time: 0.0 / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {speeds[0]:.2f} km/s</span></b>", x=0.05, y=0.95, font=dict(color='white', size=14)),
         template="plotly_dark",
         paper_bgcolor="#111111",
         plot_bgcolor="#111111",
@@ -213,15 +210,10 @@ with col1:
         sliders=[slider_dict]
     )
     
-    if is_star_rad_missing:
-        st.warning("⚠️ 항성 반지름 데이터가 없어 기본 크기(1.0 Solar Rad)로 표시 중입니다.")
-        
     st.plotly_chart(fig, use_container_width=True)
 
 with col2:
     st.subheader("📊 데이터 대시보드")
-    def check_val(val, unit=""): return f"{val:.3f} {unit}" if not pd.isna(val) else "정보 없음"
-    star_rad_display = "정보 없음 (기본값)" if is_star_rad_missing else f"{star_rad:.3f} Solar Rad"
     
     info_text = (
         f"### 🪐 행성 특성 정보\n"
@@ -232,8 +224,8 @@ with col2:
         f"* **행성 반지름:** `정보 없음 (화면 고정)` \n\n"
         f"### ☀️ 중심 항성(별) 정보\n"
         f"* **분광형 유형:** `{spectral_type}` \n"
-        f"* **표면 온도:** `{check_val(star_teff, 'K')}` \n"
-        f"* **항성 반지름:** `{star_rad_display}` \n"
-        f"* **항성 질량:** `{check_val(p_data['st_mass'] if 'st_mass' in p_data else np.nan, 'Solar Mass')}`"
+        f"* **표면 온도:** `{star_teff:.1f} K` \n"
+        f"* **항성 반지름:** `{star_rad:.3f} Solar Rad` \n"
+        f"* **항성 질량:** `{p_data['st_mass']:.3f} Solar Mass`"
     )
     st.markdown(info_text)
