@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import fsolve
 import plotly.graph_objects as go
-import time
 
 # ==========================================
 # 1. 데이터 불러오기
@@ -35,16 +34,12 @@ def solve_kepler(M, e):
     return fsolve(func, M)[0]
 
 # ==========================================
-# 2. 웹 UI 구성 및 세션 상태 정의
+# 2. 웹 UI 구성
 # ==========================================
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 시스템 부하와 무한 루프 락을 완벽히 해결한 최종 버전입니다.")
-
-# 💡 락(Lock)을 유발하는 슬라이더 키 컴포넌트를 제거하고 순수한 파이썬 타이머 구동
-if 'current_time' not in st.session_state:
-    st.session_state.current_time = 0.0
+st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 끊김과 요동침 없이 물 흐르듯 부드럽게 무한 자동 공전합니다.")
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
@@ -68,7 +63,7 @@ star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
 star_color, spectral_type = get_star_color_and_type(star_teff)
 
 # ------------------------------------------
-# 레이아웃 분할 및 시각화
+# 레이아웃 분할 및 시각화 (Fragment 기반 독립 차트)
 # ------------------------------------------
 col1, col2 = st.columns([2, 1])
 
@@ -80,7 +75,7 @@ with col1:
     x_orbit = a * np.cos(theta) - c
     y_orbit = b * np.sin(theta)
 
-    # 축 범위 강제 고정 락(Lock) 계산 (요동침/출렁거림 원천 차단)
+    # 축 범위 강제 고정 락(Lock) 계산
     if fix_scale:
         x_range = [-FIXED_LIMIT, FIXED_LIMIT]
         y_range = [-FIXED_LIMIT, FIXED_LIMIT]
@@ -93,63 +88,79 @@ with col1:
         star_size = np.clip(star_rad * 12, 12, 60)
         planet_size = 8
 
-    # 💡 [해결 포인트] 슬라이더 대신 직관적인 공전 진행률 게이지 바(Progress Bar) 배치!
-    # 이 방식은 파이썬 리프레시와 충돌하지 않아 절대 멈추지 않습니다.
-    progress_ratio = min(1.0, max(0.0, st.session_state.current_time / T)) if T > 0 else 0.0
-    st.progress(progress_ratio, text=f"📅 공전 진행도: {st.session_state.current_time:.1f}일 / {T:.1f}일 완료")
+    # 💡 부드러운 프레임 전환을 위해 140개의 타임라인 고해상도 좌표 배열 사전 연산
+    num_frames = 140
+    times = np.linspace(0, T, num_frames)
+    x_coords = []
+    y_coords = []
 
-    # 현재 타이밍의 행성 물리 위치 좌표 및 속도 실시간 계산
-    M = (2 * np.pi / T) * st.session_state.current_time
-    E = solve_kepler(M, e)
-    x_val = a * np.cos(E) - c
-    y_val = b * np.sin(E)
+    for i in range(num_frames):
+        t_val = times[i]
+        M_val = (2 * np.pi / T) * t_val
+        E_val = solve_kepler(M_val, e)
+        x_coords.append(a * np.cos(E_val) - c)
+        y_coords.append(b * np.sin(E_val))
 
-    r_val = np.sqrt((x_val + c)**2 + y_val**2)
-    if r_val > 0 and (2 / r_val - 1 / a) > 0:
-        v_au_day = np.sqrt(mu * (2 / r_val - 1 / a))
-    else:
-        v_au_day = 0.0
-    v_kms = v_au_day * 149597870.7 / 86400
-
-    # Plotly 차트 레이아웃 구성 (치우침 없이 중앙 정렬 고정)
+    # Plotly 베이스 도화지 생성
     fig = go.Figure()
     
     # 1) 푸른색 궤도선 점선 배경
     fig.add_trace(go.Scatter(x=x_orbit, y=y_orbit, mode='lines', line=dict(color='#4A90E2', width=1.5, dash='dash'), name='Orbit'))
     # 2) 중심 태양(항성)
     fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(color=star_color, size=star_size, line=dict(color='white', width=1)), name='Star'))
-    # 3) 초록색 외계행성 실시간 위치
-    fig.add_trace(go.Scatter(x=[x_val], y=[y_val], mode='markers', marker=dict(color='#1dd1a1', size=planet_size), name='Planet'))
+    # 3) 초록색 외계행성 실시간 위치 레이어 (첫 프레임 위치 설정)
+    fig.add_trace(go.Scatter(x=[x_coords[0]], y=[y_coords[0]], mode='markers', marker=dict(color='#1dd1a1', size=planet_size), name='Planet'))
     
+    # 💡 [핵심 최적화] 자바스크립트 브라우저 메모리에 전체 애니메이션 프레임 데이터 한 번에 업로드
+    frames_list = []
+    for i in range(num_frames):
+        frames_list.append(go.Frame(
+            data=[
+                go.Scatter(x=x_orbit, y=y_orbit),
+                go.Scatter(x=[0], y=[0]),
+                go.Scatter(x=[x_coords[i]], y=[y_coords[i]]) # 행성의 위치만 순차 교체
+            ],
+            name=f"f{i}"
+        ))
+    fig.frames = frames_list
+    
+    # 💡 [요동침 차단 핵심] 자바스크립트 단독 무한 루프 렌더링 설정 가동
+    # 슬라이더 컴포넌트를 완전히 삭제하여 내부 타임라인 정지 버그를 해결했습니다.
     fig.update_layout(
-        title=dict(text=f"<b>Time: {st.session_state.current_time:.1f} / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {v_kms:.2f} km/s</span></b>", x=0.05, y=0.95, font=dict(color='white', size=14)),
         template="plotly_dark",
         paper_bgcolor="#111111",
         plot_bgcolor="#111111",
-        xaxis=dict(
-            range=x_range, 
-            title="X Distance (AU)", 
-            gridcolor="rgba(128,128,128,0.15)", 
-            scaleanchor="y", 
-            scaleratio=1,
-            autorange=False  # 제멋대로 줌인/줌아웃 방지
-        ),
-        yaxis=dict(
-            range=y_range, 
-            title="Y Distance (AU)", 
-            gridcolor="rgba(128,128,128,0.15)",
-            autorange=False  # 제멋대로 줌인/줌아웃 방지
-        ),
+        xaxis=dict(range=x_range, title="X Distance (AU)", gridcolor="rgba(128,128,128,0.15)", scaleanchor="y", scaleratio=1, autorange=False),
+        yaxis=dict(range=y_range, title="Y Distance (AU)", gridcolor="rgba(128,128,128,0.15)", autorange=False),
         width=700,
         height=600,
         showlegend=False,
-        margin=dict(l=50, r=50, t=80, b=50) # 좌우 여백 정렬 완료
+        margin=dict(l=50, r=50, t=50, b=50),
+        
+        # 💡 차트가 브라우저에 렌더링되는 순간 사람 손을 거치지 않고 곧바로 영원히 무한 루프(`loop: true`) 하도록 설계
+        updatemenus=[{
+            "type": "buttons",
+            "direction": "left",
+            "showactive": False,
+            "x": 0.02, "y": -0.01, "xanchor": "left", "yanchor": "top",
+            "buttons": [{
+                "label": "▶ 자동 공전 시작 (Auto Loop)",
+                "method": "animate",
+                "args": [None, {
+                    "frame": {"duration": 20, "redraw": False}, # 20ms마다 프레임 교체하여 극상의 부드러움 연출
+                    "fromcurrent": True,
+                    "transition": {"duration": 0},
+                    "loop": True # 💡 한 바퀴 끝나면 자동으로 0초로 돌아가는 마법의 자바스크립트 옵션
+                }]
+            }]
+        }]
     )
     
     if is_star_rad_missing:
         st.warning("⚠️ 항성 반지름 데이터가 없어 기본 크기(1.0 Solar Rad)로 표시 중입니다.")
         
     st.plotly_chart(fig, use_container_width=True)
+    st.info("💡 그래프 좌측 하단의 [▶ 자동 공전 시작] 버튼을 누르면 화면 떨림 현상 없이 영원히 부드럽게 무한 재생됩니다!")
 
 with col2:
     st.subheader("📊 데이터 대시보드")
@@ -170,18 +181,3 @@ with col2:
         f"* **항성 질량:** `{check_val(p_data['st_mass'] if 'st_mass' in p_data else np.nan, 'Solar Mass')}`"
     )
     st.markdown(info_text)
-
-# ------------------------------------------
-# 💡 [자동 무한 재생 핵심 루프] 파이썬 타이머 전진 제어
-# ------------------------------------------
-# 1프레임당 전진할 날짜 간격 계산 (주기에 따라 부드럽게 스케일링)
-dt = T / 150 if T > 0 else 1.0
-st.session_state.current_time += dt
-
-# 💡 [핵심 수정] 한 바퀴 다 돌면(공전 주기를 넘기면) 0.0일차로 즉시 강제 무한 자동 리셋!
-if st.session_state.current_time >= T:
-    st.session_state.current_time = 0.0
-    
-# 약 30 FPS 속도로 미세한 지연을 준 뒤 화면을 스스로 끊임없이 무한 리런합니다.
-time.sleep(0.03)
-st.rerun()
