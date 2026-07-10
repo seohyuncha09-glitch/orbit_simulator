@@ -37,8 +37,6 @@ if not all_planet_names:
     st.error("⚠️ 조건에 맞는 완전한 행성 데이터가 없습니다.")
     st.stop()
 
-FIXED_LIMIT = 15.0
-
 def get_star_color_and_type(teff):
     if teff >= 10000: return '#9bb0ff', 'O / B'
     elif teff >= 7500: return '#aabfff', 'A'
@@ -61,7 +59,6 @@ st.markdown("정밀 가공된 NASA 아카이브 데이터를 기반으로 구동
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
-fix_scale = st.sidebar.checkbox("시뮬레이션 축 범위 고정 (⚠️천체 크기 연동)", value=False)
 selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
 
 # 행성 데이터 추출
@@ -106,18 +103,9 @@ theta = np.linspace(0, 2 * np.pi, 200)
 x_orbit = a * np.cos(theta) - c
 y_orbit = b * np.sin(theta)
 
-# 축 범위 매핑 (순수 float 변환)
-if fix_scale:
-    x_range = [float(-FIXED_LIMIT), float(FIXED_LIMIT)]
-    y_range = [float(-FIXED_LIMIT), float(FIXED_LIMIT)]
-    star_size = np.clip(star_rad * 3, 5, 40)
-    planet_size = 5
-else:
-    limit = a * 1.3
-    x_range = [float(-limit - c), float(limit - c)]
-    y_range = [float(-limit), float(limit)]
-    star_size = np.clip(star_rad * 12, 10, 60)
-    planet_size = 8
+# 크기 고정화 (안전한 상수값 적용)
+star_size = np.clip(star_rad * 12, 10, 50)
+planet_size = 8
 
 # ------------------------------------------
 # 레이아웃 분할 및 시각화
@@ -180,16 +168,15 @@ with col1:
         steps=steps_list
     )
     
-    # 💡 [핵심 버그 수정] update_layout을 완전히 우회하고 파이썬 기본 사전(dict) 구조로 덮어씌웁니다.
-    # 크래시를 유발하던 'scaleanchor="y"' 속성을 완벽히 제거했습니다.
+    # 💡 [해결 핵심] 에러를 내던 수동 range 설정을 완전히 빼버리고 Plotly 자율 매핑에 맡깁니다.
     layout_config = {
         "title": {"text": f"<b>🪐 {selected_planet} Orbit (Period: {T:.1f} days)</b>", "x": 0.05, "y": 0.95, "font": {"color": "white", "size": 15}},
         "template": "plotly_dark",
         "paper_bgcolor": "#111111",
         "plot_bgcolor": "#111111",
-        "xaxis": {"range": x_range, "title": "X Distance (AU)", "gridcolor": "rgba(128,128,128,0.15)", "showzeroline": False},
-        "yaxis": {"range": y_range, "title": "Y Distance (AU)", "gridcolor": "rgba(128,128,128,0.15)", "showzeroline": False},
-        "width": 650,   # 비율 고정 대신 가로 세로를 정확한 정사각형 픽셀로 강제 지정
+        "xaxis": {"title": "X Distance (AU)", "gridcolor": "rgba(128,128,128,0.15)", "showzeroline": False},
+        "yaxis": {"title": "Y Distance (AU)", "gridcolor": "rgba(128,128,128,0.15)", "showzeroline": False},
+        "width": 650,   
         "height": 650,
         "showlegend": False,
         "updatemenus": [menu_dict],
