@@ -22,7 +22,7 @@ except Exception as e:
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 궤도 크기에 따라 축 범위가 자동으로 확장되며 숫자 눈금이 표시됩니다.")
+st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 선택한 행성의 궤도 크기에 맞춰 축 범위가 조정되어 일정한 크기로 시뮬레이션됩니다.")
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
@@ -61,7 +61,7 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
     
-    # 💡 자바스크립트 내부에 가변 축 스케일링 및 숫자 눈금 그리기 로직 추가
+    # 💡 자바스크립트 코드 수정: 궤도 크기에 따라 축 범위를 가변적으로 설정
     html_code = f"""
     <!DOCTYPE html>
     <html>
@@ -106,20 +106,17 @@ with col1:
             const mu = {mu};
             const starColor = "{star_color}";
             
-            // 💡 [가변 범위 핵심] 행성 궤도의 최대 반경(원점 기준 원일점 거리)을 계산해 여유 있게 여백(1.4배)을 둡니다.
+            // 💡 [수정 포인트] 궤도 크기에 따라 가변적인 축 범위 설정
             const maxOrbitRadius = a * (1 + e);
-            const limit = maxOrbitRadius * 1.4;
+            const limit = maxOrbitRadius * 1.3;
             
-            // 패딩(여백)을 고려해 그리기 영역 제한 (눈금 표시용 공간 좌측/하단 40px 확보)
             const plotWidth = canvas.width - 60;
             const plotHeight = canvas.height - 60;
             const startX = 50;
             const startY = 20;
             
-            // 1 AU가 화면에서 차지할 픽셀 가동 스케일
             const scale = (plotWidth / 2) / limit;
             
-            // 천체 시스템의 정중앙 좌표 (이전과 달리 축 눈금 공간 때문에 약간 시프트)
             const centerX = startX + (plotWidth / 2);
             const centerY = startY + (plotHeight / 2);
             
@@ -137,61 +134,59 @@ with col1:
 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
-                // 💡 1. 축 가이드 라인 및 숫자 눈금 그리기
+                // 1. 축 가이드 라인 및 숫자 눈금 그리기 (눈금 간격 자동 조절)
                 ctx.lineWidth = 1;
                 ctx.font = "11px 'Segoe UI'";
                 ctx.textAlign = "center";
                 ctx.textBaseline = "top";
                 
-                // 적절한 눈금 간격(AU 단위) 자동 설정
                 let stepAU = 1;
                 if (limit > 5) stepAU = 2;
                 if (limit > 15) stepAU = 5;
-                if (limit > 50) stepAU = 20;
-                if (limit > 200) stepAU = 50;
-                if (limit < 0.5) stepAU = 0.1;
+                if (limit > 50) stepAU = 10;
+                if (limit > 150) stepAU = 25;
+                if (limit > 500) stepAU = 100;
+                if (limit < 1) stepAU = 0.25;
 
-                // X축 눈금선 및 모눈망 격자
                 for (let xAU = -Math.floor(limit); xAU <= limit; xAU += stepAU) {{
                     if (xAU === 0) continue;
                     let canvasX = centerX + (xAU * scale);
                     if (canvasX >= startX && canvasX <= startX + plotWidth) {{
-                        // 세로 격자 그리드
                         ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
                         ctx.beginPath(); ctx.moveTo(canvasX, startY); ctx.lineTo(canvasX, startY + plotHeight); ctx.stroke();
                         
-                        // 하단 X축 숫자 눈금 표시
                         ctx.fillStyle = '#888888';
-                        ctx.fillText(xAU.toFixed(limit < 1 ? 1 : 0), canvasX, startY + plotHeight + 5);
+                        ctx.fillText(xAU.toFixed(limit < 1 ? 2 : 0), canvasX, startY + plotHeight + 5);
                         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
                         ctx.beginPath(); ctx.moveTo(canvasX, startY + plotHeight); ctx.lineTo(canvasX, startY + plotHeight + 4); ctx.stroke();
                     }}
                 }}
                 
-                // Y축 눈금선 및 모눈망 격자
                 ctx.textAlign = "right";
                 ctx.textBaseline = "middle";
                 for (let yAU = -Math.floor(limit); yAU <= limit; yAU += stepAU) {{
                     if (yAU === 0) continue;
-                    let canvasY = centerY - (yAU * scale); // 캔버스는 상단이 (-)이므로 보정
+                    let canvasY = centerY - (yAU * scale);
                     if (canvasY >= startY && canvasY <= startY + plotHeight) {{
-                        // 가로 격자 그리드
                         ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
                         ctx.beginPath(); ctx.moveTo(startX, canvasY); ctx.lineTo(startX + plotWidth, canvasY); ctx.stroke();
                         
-                        // 좌측 Y축 숫자 눈금 표시
                         ctx.fillStyle = '#888888';
-                        ctx.fillText(yAU.toFixed(limit < 1 ? 1 : 0), startX - 8, canvasY);
+                        ctx.fillText(yAU.toFixed(limit < 1 ? 2 : 0), startX - 8, canvasY);
                         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
                         ctx.beginPath(); ctx.moveTo(startX, canvasY); ctx.lineTo(startX - 4, canvasY); ctx.stroke();
                     }}
                 }}
 
-                // 메인 바깥 외곽 축선 그리기 (Border)
+                // 💡 [수정 포인트] 눈금 숫자의 단위 (AU) 표시
+                ctx.fillStyle = '#888888';
+                ctx.fillText("AU", centerX + (maxOrbitRadius * scale) + 15, centerY + 2);
+                ctx.fillText("AU", centerX + 2, centerY - (maxOrbitRadius * scale) - 15);
+
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
                 ctx.strokeRect(startX, startY, plotWidth, plotHeight);
 
-                // 2. 푸른색 공전 궤도선 (축 락이 걸린 상태에서 타원 이동)
+                // 2. 푸른색 공전 궤도선
                 ctx.save();
                 ctx.translate(centerX - (c * scale), centerY);
                 ctx.strokeStyle = '#4A90E2';
