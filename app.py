@@ -13,15 +13,18 @@ def load_data():
 
 try:
     df = load_data()
+    # 데이터가 아예 없거나 잘못된 행성 사전 필터링 (장반경과 주기가 필수)
+    df = df[df['pl_orbsmax'].notna() & (df['pl_orbsmax'] > 0)]
+    df = df[df['pl_orbper'].notna() & (df['pl_orbper'] > 0)]
     all_planet_names = sorted(df['pl_name'].dropna().unique())
 except Exception as e:
-    st.error("CSV 파일을 찾을 수 없습니다. GitHub 저장소에 'PS_data.csv' 파일이 있는지 확인해 주세요.")
+    st.error("CSV 파일을 찾을 수 없거나 데이터 구조에 문제가 있습니다.")
     st.stop()
 
 FIXED_LIMIT = 15.0
 
 def get_star_color_and_type(teff):
-    if pd.isna(teff): return '#FF9F43', 'Unknown'
+    if pd.isna(teff) or np.isnan(teff): return '#FF9F43', 'Unknown'
     if teff >= 10000: return '#9bb0ff', 'O / B'
     elif teff >= 7500: return '#aabfff', 'A'
     elif teff >= 6000: return '#f8f7ff', 'F'
@@ -46,12 +49,15 @@ st.sidebar.header("⚙️ 제어 패널")
 fix_scale = st.sidebar.checkbox("시뮬레이션 축 범위 고정 (⚠️천체 크기 연동)", value=False)
 selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
 
-# 행성 데이터 추출
+# 행성 데이터 추출 및 안전한 형변환
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
-a = float(p_data['pl_orbsmax'])
-e = float(p_data['pl_orbeccen']) if not pd.isna(p_data['pl_orbeccen']) else 0.0
-T = float(p_data['pl_orbper'])
 
+a = float(p_data['pl_orbsmax']) if not pd.isna(p_data['pl_orbsmax']) else 1.0
+e = float(p_data['pl_orbeccen']) if not pd.isna(p_data['pl_orbeccen']) else 0.0
+T = float(p_data['pl_orbper']) if not pd.isna(p_data['pl_orbper']) else 365.0
+
+# 물리 상수 계산 안전화
+if e >= 1.0 or e < 0: e = 0.0  # 탈출 궤도나 이상 이심률 방지
 b = a * np.sqrt(1 - e**2)
 c = a * e
 mu = (4 * np.pi**2 * (a**3)) / (T**2) if T > 0 else 1.0
@@ -82,19 +88,16 @@ for t in times:
     
     r_val = np.sqrt((x_val + c)**2 + y_val**2)
     
-    # 활력방정식 안전 연산 오차 방지 강화
     if r_val > 0.001 and (2 / r_val - 1 / a) > 0:
         v_au_day = np.sqrt(mu * (2 / r_val - 1 / a))
     else:
         v_au_day = 0.0
         
     v_kms = v_au_day * 149597870.7 / 86400
-    # 계산값에 에러(NaN)가 발생하면 0.0으로 대체
     if np.isnan(v_kms) or np.isinf(v_kms):
         v_kms = 0.0
     speeds.append(v_kms)
 
-# 만약 데이터 오류로 speeds 리스트가 비어있을 때를 대비한 2차 안전장치
 if not speeds:
     speeds = [0.0] * num_frames
 
@@ -103,7 +106,7 @@ theta = np.linspace(0, 2 * np.pi, 200)
 x_orbit = a * np.cos(theta) - c
 y_orbit = b * np.sin(theta)
 
-# 크기 및 축 범위 매핑
+# 💡 [핵심 해결책] 축 범위 계산 시 NaN 발생을 완벽하게 방지하는 방어 로직
 if fix_scale:
     x_range = [-FIXED_LIMIT, FIXED_LIMIT]
     y_range = [-FIXED_LIMIT, FIXED_LIMIT]
@@ -111,10 +114,18 @@ if fix_scale:
     planet_size = 5
 else:
     limit = a * 1.3
-    x_range = [-limit - c, limit - c]
-    y_range = [-limit, limit]
+    # 만약 계산된 limit이 올바르지 않다면 기본 범위 지정
+    if np.isnan(limit) or np.isinf(limit) or limit <= 0:
+        limit = 5.0
+    
+    x_range = [float(-limit - c), float(limit - c)]
+    y_range = [float(-limit), float(limit)]
     star_size = np.clip(star_rad * 12, 10, 60)
     planet_size = 8
+
+# 최종 범위 값 재검증 (안전장치)
+if np.isnan(x_range[0]) or np.isnan(x_range[1]): x_range = [-2.0, 2.0]
+if np.isnan(y_range[0]) or np.isnan(y_range[1]): y_range = [-2.0, 2.0]
 
 # ------------------------------------------
 # 레이아웃 분할 및 시각화
@@ -186,7 +197,6 @@ with col1:
         "steps": steps_list
     }
     
-    # 💡 initial_speed 변수를 따로 파싱하여 0번 인덱스 에러 방지 처리
     initial_speed = speeds[0] if len(speeds) > 0 else 0.0
     
     fig.update_layout(
