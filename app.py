@@ -22,20 +22,11 @@ except Exception as e:
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 배속 조절 버튼을 사용하여 공전 속도를 제어할 수 있습니다.")
+st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 하단의 컨트롤러에서 재생 상태와 공전 속도를 실시간으로 제어할 수 있습니다.")
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
 selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
-
-# 💡 [2번 기능 추가] 공전 속도 배속 선택 버튼 (라디오 버튼 스타일)
-speed_option = st.sidebar.radio(
-    "⏱️ 공전 속도 배속 조절",
-    options=["0.5x (느리게)", "1.0x (정속)", "2.0x (빠르게)"],
-    index=1  # 기본값: 1.0x (정속)
-)
-# 문자열에서 숫자 배속 값만 추출 (0.5, 1.0, 2.0)
-speed_multiplier = float(speed_option.split("x")[0])
 
 # 행성 데이터 추출
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
@@ -70,6 +61,7 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
     
+    # 💡 html_code 앞에 f 접두사를 확실히 붙여 파이썬 변수가 정상 치환되도록 보장합니다.
     html_code = f"""
     <!DOCTYPE html>
     <html>
@@ -80,13 +72,19 @@ with col1:
             canvas {{ background: #111111; display: block; }}
             #infoOverlay {{ position: absolute; top: 15px; left: 20px; font-size: 15px; font-weight: bold; line-height: 1.5; pointer-events: none; z-index: 10; }}
             #speedText {{ color: #1dd1a1; }}
-            #controlBtn {{ 
+            
+            /* 하단 컨트롤러 영역 정렬 스타일 */
+            #controlsContainer {{
                 position: absolute; bottom: 25px; left: 70px; 
+                display: flex; gap: 10px; align-items: center; z-index: 10;
+            }}
+            .uiBtn {{ 
                 background: #111111; border: 1px solid #555555; color: white; 
                 padding: 6px 12px; font-size: 13px; font-weight: bold; border-radius: 4px; cursor: pointer; 
-                transition: all 0.2s; z-index: 10;
+                transition: all 0.2s;
             }}
-            #controlBtn:hover {{ background: #222222; border-color: #1dd1a1; color: #1dd1a1; }}
+            .uiBtn:hover {{ background: #222222; border-color: #1dd1a1; color: #1dd1a1; }}
+            .activeSpeed {{ background: #1dd1a1 !important; color: #111111 !important; border-color: #1dd1a1 !important; }}
         </style>
     </head>
     <body>
@@ -95,7 +93,14 @@ with col1:
                 <div id="timeText">Time: 0.0 / {T:.1f} days</div>
                 <div id="speedText">Speed: 0.00 km/s</div>
             </div>
-            <button id="controlBtn">⏸ Pause</button>
+            
+            <div id="controlsContainer">
+                <button id="controlBtn" class="uiBtn">⏸ Pause</button>
+                <button id="speed05" class="uiBtn">0.5x</button>
+                <button id="speed10" class="uiBtn activeSpeed">1.0x</button>
+                <button id="speed20" class="uiBtn">2.0x</button>
+            </div>
+            
             <canvas id="orbitCanvas" width="700" height="580"></canvas>
         </div>
 
@@ -106,6 +111,10 @@ with col1:
             const speedLabel = document.getElementById('speedText');
             const controlBtn = document.getElementById('controlBtn');
             
+            const btn05 = document.getElementById('speed05');
+            const btn10 = document.getElementById('speed10');
+            const btn20 = document.getElementById('speed20');
+            
             const a = {a};
             const e = {e};
             const b = {b};
@@ -113,9 +122,6 @@ with col1:
             const T = {T};
             const mu = {mu};
             const starColor = "{star_color}";
-            
-            // 스트림릿에서 전달받은 배속Multiplier 값 적용
-            const speedMultiplier = {speedMultiplier};
             
             const paddingLeft = 70;
             const paddingRight = 40;
@@ -128,18 +134,32 @@ with col1:
             const limit = (a + c) * 1.3;
             const scale = Math.min(plotWidth, plotHeight) / (2 * limit);
             
-            // 항성 중심을 기준으로 왼쪽 시프트
             const centerX = paddingLeft + (plotWidth / 2) - (plotWidth * 0.15);
             const centerY = paddingTop + (plotHeight / 2);
             
             let currentDays = 0;
             let isPlaying = true;
+            let speedMultiplier = 1.0; // 기본 배속은 1.0 정속으로 출발
             
+            // 재생 / 일시정지 이벤트 리스너
             controlBtn.addEventListener('click', () => {{
                 isPlaying = !isPlaying;
                 controlBtn.textContent = isPlaying ? "⏸ Pause" : "▶ Play";
                 if (isPlaying) draw();
             }});
+            
+            // 💡 배속 버튼 클릭 이벤트 리스너 리스트 및 스타일 교체식 구현
+            function updateSpeedSelection(activeBtn, targetMultiplier) {{
+                btn05.classList.remove('activeSpeed');
+                btn10.classList.remove('activeSpeed');
+                btn20.classList.remove('activeSpeed');
+                activeBtn.classList.add('activeSpeed');
+                speedMultiplier = targetMultiplier;
+            }}
+            
+            btn05.addEventListener('click', () => updateSpeedSelection(btn05, 0.5));
+            btn10.addEventListener('click', () => updateSpeedSelection(btn10, 1.0));
+            btn20.addEventListener('click', () => updateSpeedSelection(btn20, 2.0));
 
             function draw() {{
                 if (!isPlaying) return;
@@ -242,8 +262,7 @@ with col1:
                 timeLabel.innerHTML = `<b>Time: ${{currentDays.toFixed(1)}} / ${{T.toFixed(1)}} days</b>`;
                 speedLabel.innerHTML = `<b>Speed: ${{v_kms.toFixed(2)}} km/s</b>`;
                 
-                // 7. 프레임 전진
-                // 💡 [2번 기능 포인트] 기존 하루 변화량(dt)에 유저가 선택한 speedMultiplier 배속을 곱해줍니다.
+                // 7. 프레임 전진 (실시간 선택된 내부 speedMultiplier 적용)
                 let dt = (T / 350) * speedMultiplier; 
                 currentDays += dt;
                 if (currentDays >= T) currentDays = 0;
