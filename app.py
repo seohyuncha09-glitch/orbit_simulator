@@ -22,11 +22,15 @@ except Exception as e:
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 모바일에서도 하단의 컨트롤러를 통해 모든 기능을 편리하게 제어할 수 있습니다.")
+st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 제어 패널에서 가이드선을 켜고, 메인 화면 하단 슬라이더로 줌을 조절해 보세요.")
 
-# 행성 선택 상자만 사이드바에 유지 (혹은 메인에 두어도 되지만 선택의 편의상 배치)
-st.sidebar.header("🪐 행성 선택")
-selected_planet = st.sidebar.selectbox("탐색할 행성 선택", all_planet_names)
+# ⚙️ 사이드바 제어 패널 (행성 선택 및 체크박스 배치)
+st.sidebar.header("⚙️ 제어 패널")
+selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
+
+# 🌍 🟢 체크박스는 다시 제어 패널(사이드바)로 이동
+show_earth_orbit = st.sidebar.checkbox("🌍 지구 궤도 비교선 표시 (1.0 AU)", value=False)
+show_habitable_zone = st.sidebar.checkbox("🟢 골디락스 존 표시 (생명체 거주 구역)", value=False)
 
 # 행성 데이터 추출
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
@@ -65,7 +69,6 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
     
-    # 모든 제어 패널(체크박스, 슬라이더)이 HTML 캔버스 내부 하단으로 들어갑니다.
     html_code = f"""
     <!DOCTYPE html>
     <html>
@@ -79,7 +82,7 @@ with col1:
             #infoOverlay {{ position: absolute; top: 15px; left: 20px; font-size: 14px; font-weight: bold; line-height: 1.5; pointer-events: none; z-index: 10; }}
             #speedText {{ color: #1dd1a1; }}
             
-            /* 💡 메인 통합 제어 패널 스타일 */
+            /* 💡 메인 하단 제어 패널 스타일 (줌 슬라이더만 배치) */
             #mainControls {{
                 background: #1a1a1a; padding: 15px; border-radius: 8px; margin-top: 10px;
                 display: flex; flex-direction: column; gap: 12px; border: 1px solid #333;
@@ -94,7 +97,6 @@ with col1:
             .uiBtn:hover {{ background: #222222; border-color: #1dd1a1; color: #1dd1a1; }}
             .activeSpeed {{ background: #1dd1a1 !important; color: #111111 !important; border-color: #1dd1a1 !important; }}
             
-            .chkLabel {{ display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; user-select: none; }}
             .sliderContainer {{ display: flex; align-items: center; gap: 10px; font-size: 13px; flex-grow: 1; }}
             .sliderContainer input {{ flex-grow: 1; cursor: pointer; accent-color: #1dd1a1; }}
         </style>
@@ -117,15 +119,6 @@ with col1:
             </div>
             
             <div class="row">
-                <label class="chkLabel">
-                    <input type="checkbox" id="chkEarth"> 🌍 지구 궤도 (1.0 AU)
-                </label>
-                <label class="chkLabel">
-                    <input type="checkbox" id="chkHZ"> 🟢 골디락스 존
-                </label>
-            </div>
-            
-            <div class="row">
                 <div class="sliderContainer">
                     <span>🔍 줌 조절:</span>
                     <input type="range" id="zoomSlider" min="0.1" max="3.0" step="0.1" value="1.0">
@@ -140,13 +133,10 @@ with col1:
             const timeLabel = document.getElementById('timeText');
             const speedLabel = document.getElementById('speedText');
             
-            // 컨트롤 패널 요소 연결
             const controlBtn = document.getElementById('controlBtn');
             const btn05 = document.getElementById('speed05');
             const btn10 = document.getElementById('speed10');
             const btn20 = document.getElementById('speed20');
-            const chkEarth = document.getElementById('chkEarth');
-            const chkHZ = document.getElementById('chkHZ');
             const zoomSlider = document.getElementById('zoomSlider');
             const zoomVal = document.getElementById('zoomVal');
             
@@ -157,6 +147,10 @@ with col1:
             const T = {T};
             const mu = {mu};
             const starColor = "{star_color}";
+            
+            // 💡 스트림릿 사이드바 체크박스 상태 변환값 바인딩
+            const showEarthOrbit = {str(show_earth_orbit).lower()};
+            const showHabitableZone = {str(show_habitable_zone).lower()};
             
             const hzInner = {hz_inner};
             const hzOuter = {hz_outer};
@@ -181,7 +175,6 @@ with col1:
             let speedMultiplier = 1.0;
             let currentZoom = 1.0;
             
-            // 이벤트 리스너 정의 (메인 UI 기반)
             controlBtn.addEventListener('click', () => {{
                 isPlaying = !isPlaying;
                 controlBtn.textContent = isPlaying ? "⏸ Pause" : "▶ Play";
@@ -210,7 +203,6 @@ with col1:
 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
-                // 슬라이더 값 반영한 동적 스케일 계산
                 let limit = baseLimit / currentZoom;
                 let scale = Math.min(plotWidth, plotHeight) / (2 * limit);
                 
@@ -265,7 +257,7 @@ with col1:
                 ctx.strokeRect(paddingLeft, paddingTop, plotWidth, plotHeight);
 
                 // 골디락스 존 구역 그리기
-                if (chkHZ.checked) {{
+                if (showHabitableZone) {{
                     ctx.save();
                     ctx.translate(centerX, centerY);
                     ctx.fillStyle = 'rgba(29, 209, 161, 0.08)';
@@ -292,7 +284,7 @@ with col1:
                 }}
 
                 // 지구 궤도선 표시 구역
-                if (chkEarth.checked) {{
+                if (showEarthOrbit) {{
                     ctx.save();
                     ctx.translate(centerX + (earthC * scale), centerY);
                     ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
@@ -302,7 +294,7 @@ with col1:
                     ctx.ellipse(0, 0, earthA * scale, earthB * scale, 0, 0, 2 * Math.PI);
                     ctx.stroke();
                     
-                    // 💡 [글씨 겹침 해결] 골디락스 텍스트와 겹치지 않게 지구 레이블을 반지름 기준 '왼쪽(-)' 방향으로 정렬 배치
+                    // 💡 지구 레이블은 골디락스와 안 겹치게 왼쪽(-)에 배치
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
                     ctx.font = "italic 11px 'Segoe UI'";
                     ctx.textAlign = "right";
@@ -321,7 +313,7 @@ with col1:
                 ctx.stroke();
                 ctx.restore();
                 
-                // 3. 중심 항성 (태양) - 줌 스케일 보정
+                // 3. 중심 항성 (태양)
                 ctx.beginPath();
                 ctx.arc(centerX, centerY, Math.max(6, Math.min({star_rad} * 10 * currentZoom, 60)), 0, 2 * Math.PI);
                 ctx.fillStyle = starColor;
@@ -373,8 +365,7 @@ with col1:
     </html>
     """
     
-    # 제어패널이 길어졌으므로 component의 height 공간을 여유롭게 750으로 늘려줍니다.
-    st.components.v1.html(html_code, height=730)
+    st.components.v1.html(html_code, height=660)
 
 with col2:
     st.subheader("📊 데이터 대시보드")
