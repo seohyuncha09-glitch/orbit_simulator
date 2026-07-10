@@ -106,16 +106,21 @@ theta = np.linspace(0, 2 * np.pi, 200)
 x_orbit = a * np.cos(theta) - c
 y_orbit = b * np.sin(theta)
 
-# 크기 및 축 범위 매핑
+# 💡 [진짜 해결 지점] 축 범위를 소수점 4자리 순수 파이썬 float형 숫자로 강제 래핑하여 넘깁니다.
 if fix_scale:
-    x_range = [-FIXED_LIMIT, FIXED_LIMIT]
-    y_range = [-FIXED_LIMIT, FIXED_LIMIT]
+    x_range = [float(-FIXED_LIMIT), float(FIXED_LIMIT)]
+    y_range = [float(-FIXED_LIMIT), float(FIXED_LIMIT)]
     star_size = np.clip(star_rad * 3, 5, 40)
     planet_size = 5
 else:
     limit = a * 1.3
-    x_range = [float(-limit - c), float(limit - c)]
-    y_range = [float(-limit), float(limit)]
+    x_min = round(float(-limit - c), 4)
+    x_max = round(float(limit - c), 4)
+    y_min = round(float(-limit), 4)
+    y_max = round(float(limit), 4)
+    
+    x_range = [x_min, x_max]
+    y_range = [y_min, y_max]
     star_size = np.clip(star_rad * 12, 10, 60)
     planet_size = 8
 
@@ -147,7 +152,7 @@ with col1:
         
     fig.frames = frames_list
     
-    # 버튼 및 컨트롤러 딕셔너리 형태로 선언
+    # 버튼 및 컨트롤러 구성
     play_button = dict(
         label="▶ Play", 
         method="animate", 
@@ -186,7 +191,7 @@ with col1:
         steps=steps_list
     )
     
-    # 💡 [구조 분해 수정] 에러가 나는 메인 레이아웃 파트와 슬라이더 설정을 완전히 분할 주입합니다.
+    # 레이아웃 최종 반영
     fig.update_layout(
         title=dict(text=f"<b>🪐 {selected_planet} Orbit (Period: {T:.1f} days)</b>", x=0.05, y=0.95, font=dict(color='white', size=15)),
         template="plotly_dark",
@@ -199,7 +204,7 @@ with col1:
         showlegend=False
     )
     
-    # update_layout 밖에서 독립적으로 집어넣어 Plotly 파서 에러 완벽 회피
+    # 분할 속성 주입
     fig.layout.updatemenus = [menu_dict]
     fig.layout.sliders = [slider_dict]
     
