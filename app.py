@@ -36,21 +36,24 @@ selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_plane
 st.sidebar.header("⚙️ 제어 패널")
 selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
 
-# 💡 스트림릿 순정 help 물음표 툴팁 에러 수정 버전
-# 체크박스 우측에 깔끔하게 배치하기 위해 컬럼 분할을 유지합니다.
+# ⚙️ 사이드바 제어 패널
+st.sidebar.header("⚙️ 제어 패널")
+selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
+
+# 💡 key 인자를 추가하여 중복 ID(StreamlitDuplicateElementId) 에러를 방지합니다.
 col_earth_chk, col_earth_help = st.sidebar.columns([8, 2])
 with col_earth_chk:
     show_earth_orbit = st.checkbox("🌍 지구 궤도 비교선 표시", value=False)
 with col_earth_help:
-    # 텍스트 없이 help 인자만 주어 순정 회색 물음표 아이콘만 생성합니다.
-    st.write("", help="우리 태양계 지구의 공전 궤도(반지름 1.0 AU, 이심률 0.0167)를 회색 점선으로 겹쳐서 보여줍니다. 외계행성 궤도 크기와 직관적인 비교가 가능합니다.")
+    # key="earth_help_tip" 추가
+    st.write("", help="우리 태양계 지구의 공전 궤도(반지름 1.0 AU, 이심률 0.0167)를 회색 점선으로 겹쳐서 보여줍니다. 외계행성 궤도 크기와 직관적인 비교가 가능합니다.", key="earth_help_tip")
 
 col_hz_chk, col_hz_help = st.sidebar.columns([8, 2])
 with col_hz_chk:
     show_habitable_zone = st.checkbox("🟢 골디락스 존 표시", value=False)
 with col_hz_help:
-    st.write("", help="생명체 거주 가능 구역(Habitable Zone)입니다. 중심 항성의 질량을 기반으로 계산되었으며, 행성 표면에 액체 상태의 물이 존재할 수 있는 거리 범위를 초록색 띠로 나타냅니다.")
-
+    # key="hz_help_tip" 추가
+    st.write("", help="생명체 거주 가능 구역(Habitable Zone)입니다. 중심 항성의 질량을 기반으로 계산되었으며, 행성 표면에 액체 상태의 물이 존재할 수 있는 거리 범위를 초록색 띠로 나타냅니다.", key="hz_help_tip")
 # 행성 데이터 추출
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
 a = float(p_data['pl_orbsmax'])
