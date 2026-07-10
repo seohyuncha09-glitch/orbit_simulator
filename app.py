@@ -114,7 +114,7 @@ with col1:
                 <div id="timeText">Time: 0.0 / {T:.1f} days</div>
                 <div id="speedText">Speed: 0.00 km/s</div>
             </div>
-            <canvas id="orbitCanvas" width="700" height="500"></canvas>
+            <canvas id="orbitCanvas" width="700" height="400"></canvas>
         </div>
 
         <div id="mainControls">
