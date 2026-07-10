@@ -28,7 +28,7 @@ st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 
 st.sidebar.header("⚙️ 제어 패널")
 selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
 
-# 💡 [기능 제어 체크박스들]
+# [기능 제어 체크박스들]
 show_earth_orbit = st.sidebar.checkbox("🌍 지구 궤도 비교선 표시 (1.0 AU)", value=False)
 show_habitable_zone = st.sidebar.checkbox("🟢 골디락스 존 표시 (생명체 거주 구역)", value=False)
 
@@ -47,7 +47,7 @@ is_star_rad_missing = 'st_rad' not in p_data or pd.isna(p_data['st_rad'])
 star_rad = 1.0 if is_star_rad_missing else float(p_data['st_rad'])
 star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
 
-# 💡 항성 질량을 기준으로 간이 골디락스 존 (안쪽, 바깥쪽 AU) 계산
+# 항성 질량을 기준으로 간이 골디락스 존 (안쪽, 바깥쪽 AU) 계산
 star_mass = float(p_data['st_mass']) if 'st_mass' in p_data and not pd.isna(p_data['st_mass']) else 1.0
 hz_inner = 0.75 * np.sqrt(star_mass)
 hz_outer = 1.77 * np.sqrt(star_mass)
@@ -130,15 +130,12 @@ with col1:
             const mu = {mu};
             const starColor = "{star_color}";
             
-            // 체크박스 값 매핑
             const showEarthOrbit = {str(show_earth_orbit).lower()};
             const showHabitableZone = {str(show_habitable_zone).lower()};
             
-            // 골디락스 존 경계 수치 바인딩
             const hzInner = {hz_inner};
             const hzOuter = {hz_outer};
             
-            // 지구 궤도 상수
             const earthA = 1.0;
             const earthE = 0.0167;
             const earthB = earthA * Math.sqrt(1 - Math.pow(earthE, 2));
@@ -232,21 +229,19 @@ with col1:
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
                 ctx.strokeRect(paddingLeft, paddingTop, plotWidth, plotHeight);
 
-                # 💡 [3번 기능 포인트] 골디락스 존 활성화 시 배경에 녹색 도넛 형태 벨트 그리기
+                // 골디락스 존 표시 구역
                 if (showHabitableZone) {{
                     ctx.save();
-                    ctx.translate(centerX, centerY); // 항성을 원점으로 지정
-                    ctx.fillStyle = 'rgba(29, 209, 161, 0.08)'; // 연한 초록색 반투명 레이어
-                    ctx.strokeStyle = 'rgba(29, 209, 161, 0.25)'; // 구역 경계선
+                    ctx.translate(centerX, centerY);
+                    ctx.fillStyle = 'rgba(29, 209, 161, 0.08)';
+                    ctx.strokeStyle = 'rgba(29, 209, 161, 0.25)';
                     ctx.lineWidth = 1;
                     
-                    // 바깥쪽 원과 안쪽 원을 반대로 그려서 가운데 구역만 채우는 도넛 기법(Winding Rule) 사용
                     ctx.beginPath();
                     ctx.arc(0, 0, hzOuter * scale, 0, 2 * Math.PI, false);
                     ctx.arc(0, 0, hzInner * scale, 0, 2 * Math.PI, true);
                     ctx.fill();
                     
-                    // 경계선만 깔끔하게 마무리 드로잉
                     ctx.beginPath();
                     ctx.arc(0, 0, hzOuter * scale, 0, 2 * Math.PI);
                     ctx.stroke();
@@ -261,7 +256,7 @@ with col1:
                     ctx.restore();
                 }}
 
-                // 지구 궤도 비교선
+                // 지구 궤도 비교선 표시 구역
                 if (showEarthOrbit) {{
                     ctx.save();
                     ctx.translate(centerX + (earthC * scale), centerY);
@@ -279,7 +274,7 @@ with col1:
                     ctx.restore();
                 }}
 
-                # 2. 푸른색 외계행성 공전 궤도선
+                // 2. 푸른색 외계행성 공전 궤도선
                 ctx.save();
                 ctx.translate(centerX + (c * scale), centerY);
                 ctx.strokeStyle = '#4A90E2';
@@ -290,7 +285,7 @@ with col1:
                 ctx.stroke();
                 ctx.restore();
                 
-                # 3. 중심 항성 (태양)
+                // 3. 중심 항성 (태양)
                 ctx.beginPath();
                 ctx.arc(centerX, centerY, Math.max(6, Math.min({star_rad} * 10, 28)), 0, 2 * Math.PI);
                 ctx.fillStyle = starColor;
@@ -302,14 +297,14 @@ with col1:
                 ctx.lineWidth = 1;
                 ctx.stroke();
                 
-                # 4. 행성 위치 연산
+                // 4. 행성 위치 연산
                 let M_val = (2 * Math.PI / T) * currentDays;
                 let E = M_val + e * Math.sin(M_val) + (e*e/2) * Math.sin(2*M_val);
                 
                 let planetX = centerX + (c * scale) + (a * scale * Math.cos(E));
                 let planetY = centerY + (b * scale * Math.sin(E));
                 
-                # 5. 초록색 외계행성
+                // 5. 초록색 외계행성
                 ctx.beginPath();
                 ctx.arc(planetX, planetY, 6, 0, 2 * Math.PI);
                 ctx.fillStyle = '#1dd1a1';
@@ -317,7 +312,7 @@ with col1:
                 ctx.strokeStyle = '#ffffff';
                 ctx.stroke();
                 
-                # 6. 실시간 데이터 업데이트
+                // 6. 실시간 데이터 업데이트
                 let r_p = Math.sqrt(Math.pow((planetX - centerX)/scale, 2) + Math.pow((planetY - centerY)/scale, 2));
                 let v_kms = 0;
                 if (r_p > 0 && (2/r_p - 1/a) > 0) {{
@@ -328,7 +323,7 @@ with col1:
                 timeLabel.innerHTML = `<b>Time: ${{currentDays.toFixed(1)}} / ${{T.toFixed(1)}} days</b>`;
                 speedLabel.innerHTML = `<b>Speed: ${{v_kms.toFixed(2)}} km/s</b>`;
                 
-                # 7. 프레임 전진
+                // 7. 프레임 전진
                 let dt = (T / 350) * speedMultiplier; 
                 currentDays += dt;
                 if (currentDays >= T) currentDays = 0;
