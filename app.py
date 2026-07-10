@@ -17,18 +17,21 @@ except Exception as e:
     st.stop()
 
 # ==========================================
-# 2. 웹 UI 구성
+# 2. 웹 UI 구성 및 데이터 추출
 # ==========================================
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 항성이 중심에 고정되며, 궤도가 잘리지 않도록 화면이 왼쪽으로 자동 시프트됩니다.")
+st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 사이드바의 체크박스를 통해 행성 간의 상대적 궤도 크기를 비교할 수 있습니다.")
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
 selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
 
-# 행성 데이터 추출
+# 💡 [새로운 기능] 전체 축 범위 고정(상대적 크기 비교) 체크박스 추가
+fix_axis = st.sidebar.checkbox("📐 전체 축 범위 고정 (상대적 크기 비교)", value=False)
+
+# 현재 행성 데이터 추출
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
 a = float(p_data['pl_orbsmax'])
 e = float(p_data['pl_orbeccen']) if not pd.isna(p_data['pl_orbeccen']) else 0.0
@@ -37,6 +40,18 @@ T = float(p_data['pl_orbper'])
 b = a * np.sqrt(1 - e**2)
 c = a * e
 mu = (4 * np.pi**2 * (a**3)) / (T**2) if T > 0 else 1.0
+
+# 💡 [새로운 기능] 데이터 세트 전체의 최대 원일점(항성 기준 가장 먼 거리) 계산
+# 체크박스가 켜졌을 때 사용할 고정 한계값을 설정합니다.
+if fix_axis:
+    # 전체 행성의 (장반경 * (1 + 이심률)) 중 최댓값을 찾되, 유효하지 않은 데이터는 제외하고 기본 안전 마진을 둡니다.
+    df['max_r'] = df['pl_orbsmax'] * (1 + df['pl_orbeccen'].fillna(0))
+    global_max_orbit = float(df['max_r'].max())
+    # 너무 극단적인 이상치가 있을 경우를 대비해 안전 범위를 잡거나, 전체 최대치에 마진을 둡니다.
+    limit = global_max_orbit * 1.1 
+else:
+    # 기존 모드: 현재 선택된 행성에 딱 맞춰 자동 줌인
+    limit = (a + c) * 1.3
 
 # 항성 정보 물리 매핑
 is_star_rad_missing = 'st_rad' not in p_data or pd.isna(p_data['st_rad'])
@@ -114,13 +129,11 @@ with col1:
             const plotWidth = canvas.width - (paddingLeft + paddingRight);
             const plotHeight = canvas.height - (paddingTop + paddingBottom);
             
-            // 💡 [해결 포인트 1] 항성이 중심일 때 오른쪽으로 최대 반경은 a + c (원일점)입니다.
-            // 이 전체 반경이 화면 오른쪽 영역 안에 무조건 들어오도록 한계값(limit)을 보수적으로 잡습니다.
-            const limit = (a + c) * 1.3;
+            // 파이썬에서 계산된 가변 혹은 고정 limit 적용
+            const limit = {limit};
             const scale = Math.min(plotWidth, plotHeight) / (2 * limit);
             
-            // 💡 [해결 포인트 2] 항성(0,0)의 위치를 화면 정중앙이 아니라, 
-            // 오른쪽으로 길어지는 궤도를 고려해 왼쪽으로 시프트(-plotWidth * 0.15)해 줍니다.
+            // 체크박스 유무와 무관하게 항성(0,0) 중심을 기준점으로 잡고, 왼쪽 시프트하여 오른쪽 시야 확보
             const centerX = paddingLeft + (plotWidth / 2) - (plotWidth * 0.15);
             const centerY = paddingTop + (plotHeight / 2);
             
@@ -138,7 +151,7 @@ with col1:
 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
-                // 1. 축 가이드 라인 및 숫자 눈금 그리기
+                // 1. 축 가이드 라인 및 숫자 눈금 단위 동적 최적화
                 ctx.lineWidth = 1;
                 ctx.font = "11px 'Segoe UI'";
                 
@@ -148,14 +161,14 @@ with col1:
                 if (limit > 20) stepAU = 5;
                 if (limit > 50) stepAU = 10;
                 if (limit > 150) stepAU = 50;
-                if (limit > 600) stepAU = 200;
+                if (limit > 500) stepAU = 200;
+                if (limit > 1500) stepAU = 500; // 초대형 고정 축을 위한 세팅 추가
                 if (limit < 1) stepAU = 0.2;
                 if (limit < 0.3) stepAU = 0.05;
 
-                // X축 눈금선 (항성 centerX 기준)
+                // X축 눈금선
                 ctx.textAlign = "center";
                 ctx.textBaseline = "top";
-                // 왼쪽 시프트 되었으므로 더 넓은 범위를 커버하도록 가이드라인 반복문 범위 확장
                 for (let xAU = -Math.floor(limit*2/stepAU)*stepAU; xAU <= limit * 2; xAU += stepAU) {{
                     let canvasX = centerX + (xAU * scale);
                     if (canvasX >= paddingLeft && canvasX <= paddingLeft + plotWidth) {{
@@ -168,7 +181,7 @@ with col1:
                     }}
                 }}
                 
-                // Y축 눈금선 (항성 centerY 기준)
+                // Y축 눈금선
                 ctx.textAlign = "right";
                 ctx.textBaseline = "middle";
                 for (let yAU = -Math.floor(limit*2/stepAU)*stepAU; yAU <= limit * 2; yAU += stepAU) {{
@@ -188,7 +201,6 @@ with col1:
                 ctx.strokeRect(paddingLeft, paddingTop, plotWidth, plotHeight);
 
                 // 2. 푸른색 공전 궤도선
-                // 💡 항성이 (0,0) 중심이므로, 타원의 궤도 중심은 초점(c)만큼 오른쪽으로 이동해야 일치합니다.
                 ctx.save();
                 ctx.translate(centerX + (c * scale), centerY);
                 ctx.strokeStyle = '#4A90E2';
@@ -199,9 +211,9 @@ with col1:
                 ctx.stroke();
                 ctx.restore();
                 
-                // 3. 중심 항성 (태양) - 완벽한 모눈망 원점(centerX, centerY)에 고정
+                // 3. 중심 항성 (태양)
                 ctx.beginPath();
-                ctx.arc(centerX, centerY, Math.max(6, Math.min({star_rad} * 10, 28)), 0, 2 * Math.PI);
+                ctx.arc(centerX, centerY, Math.max(4, Math.min({star_rad} * 10, 28)), 0, 2 * Math.PI);
                 ctx.fillStyle = starColor;
                 ctx.shadowColor = starColor;
                 ctx.shadowBlur = 12;
@@ -211,17 +223,16 @@ with col1:
                 ctx.lineWidth = 1;
                 ctx.stroke();
                 
-                // 4. 행성 위치 연산 (항성 위치 기준 매핑)
+                // 4. 행성 위치 연산
                 let M_val = (2 * Math.PI / T) * currentDays;
                 let E = M_val + e * Math.sin(M_val) + (e*e/2) * Math.sin(2*M_val);
                 
-                // 케플러 방정식 법칙에 따라 원점(항성) 기준 궤도 렌더링
                 let planetX = centerX + (c * scale) + (a * scale * Math.cos(E));
                 let planetY = centerY + (b * scale * Math.sin(E));
                 
-                // 5. 초록색 외계행성
+                // 5. 초록색 외계행성 (축 고정 시 너무 작아져서 안 보이는 현상을 막기 위해 최소 크기 3px 보장)
                 ctx.beginPath();
-                ctx.arc(planetX, planetY, 6, 0, 2 * Math.PI);
+                ctx.arc(planetX, planetY, Math.max(3, 6 * Math.sqrt(scale/0.5)), 0, 2 * Math.PI);
                 ctx.fillStyle = '#1dd1a1';
                 ctx.fill();
                 ctx.strokeStyle = '#ffffff';
