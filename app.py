@@ -22,7 +22,7 @@ except Exception as e:
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 선택한 행성의 궤도 크기에 맞춰 축 범위가 조정되어 일정한 크기로 시뮬레이션됩니다.")
+st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 궤도 크기와 관계없이 완벽한 비율로 자동 줌 조절이 적용됩니다.")
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
@@ -61,7 +61,6 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
     
-    # 💡 자바스크립트 코드 수정: 궤도 크기에 따라 축 범위를 가변적으로 설정
     html_code = f"""
     <!DOCTYPE html>
     <html>
@@ -70,13 +69,13 @@ with col1:
             body {{ background-color: #111111; margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; }}
             #container {{ position: relative; width: 700px; height: 580px; margin: 0 auto; }}
             canvas {{ background: #111111; display: block; }}
-            #infoOverlay {{ position: absolute; top: 15px; left: 20px; font-size: 15px; font-weight: bold; line-height: 1.5; pointer-events: none; }}
+            #infoOverlay {{ position: absolute; top: 15px; left: 20px; font-size: 15px; font-weight: bold; line-height: 1.5; pointer-events: none; z-index: 10; }}
             #speedText {{ color: #1dd1a1; }}
             #controlBtn {{ 
-                position: absolute; bottom: 15px; left: 20px; 
+                position: absolute; bottom: 25px; left: 70px; 
                 background: #111111; border: 1px solid #555555; color: white; 
                 padding: 6px 12px; font-size: 13px; font-weight: bold; border-radius: 4px; cursor: pointer; 
-                transition: all 0.2s;
+                transition: all 0.2s; z-index: 10;
             }}
             #controlBtn:hover {{ background: #222222; border-color: #1dd1a1; color: #1dd1a1; }}
         </style>
@@ -106,19 +105,30 @@ with col1:
             const mu = {mu};
             const starColor = "{star_color}";
             
-            // 💡 [수정 포인트] 궤도 크기에 따라 가변적인 축 범위 설정
-            const maxOrbitRadius = a * (1 + e);
-            const limit = maxOrbitRadius * 1.3;
+            // 💡 [해결 포인트] 궤도가 잘리지 않도록 초점 이동(c)과 타원의 최대 반경을 완벽히 계산
+            const maxRadiusX = a + c; // 초점 기준 오른쪽 최대 거리
+            const minRadiusX = a - c; // 초점 기준 왼쪽 최대 거리
+            const maxBoundX = Math.max(maxRadiusX, minRadiusX);
+            const maxBoundY = b;
             
-            const plotWidth = canvas.width - 60;
-            const plotHeight = canvas.height - 60;
-            const startX = 50;
-            const startY = 20;
+            // 패딩 영역을 안전하게 분리 (여백 확보)
+            const paddingLeft = 70;
+            const paddingRight = 40;
+            const paddingTop = 40;
+            const paddingBottom = 60;
             
-            const scale = (plotWidth / 2) / limit;
+            const plotWidth = canvas.width - (paddingLeft + paddingRight);
+            const plotHeight = canvas.height - (paddingTop + paddingBottom);
             
-            const centerX = startX + (plotWidth / 2);
-            const centerY = startY + (plotHeight / 2);
+            // 💡 렌더링 박스 크기(plotWidth, plotHeight)에 부합하는 철저한 가변 한계값(limit) 계산
+            const limit = Math.max(maxBoundX, maxBoundY) * 1.3;
+            
+            // 가로 세로 중 찌그러짐을 방지하는 1:1 완벽 픽셀 매핑 스케일
+            const scale = Math.min(plotWidth, plotHeight) / (2 * limit);
+            
+            // 스케일이 적용된 그래프 영역의 실제 중심점 좌표 계산
+            const centerX = paddingLeft + (plotWidth / 2);
+            const centerY = paddingTop + (plotHeight / 2);
             
             let currentDays = 0;
             let isPlaying = true;
@@ -134,59 +144,63 @@ with col1:
 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
-                // 1. 축 가이드 라인 및 숫자 눈금 그리기 (눈금 간격 자동 조절)
+                // 1. 축 가이드 라인 및 숫자 눈금 그리기 (눈금 단위 최적화)
                 ctx.lineWidth = 1;
                 ctx.font = "11px 'Segoe UI'";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "top";
                 
                 let stepAU = 1;
-                if (limit > 5) stepAU = 2;
-                if (limit > 15) stepAU = 5;
+                if (limit > 3) stepAU = 1;
+                if (limit > 8) stepAU = 2;
+                if (limit > 20) stepAU = 5;
                 if (limit > 50) stepAU = 10;
-                if (limit > 150) stepAU = 25;
-                if (limit > 500) stepAU = 100;
-                if (limit < 1) stepAU = 0.25;
+                if (limit > 150) stepAU = 50;
+                if (limit > 600) stepAU = 200;
+                if (limit < 1) stepAU = 0.2;
+                if (limit < 0.3) stepAU = 0.05;
 
-                for (let xAU = -Math.floor(limit); xAU <= limit; xAU += stepAU) {{
-                    if (xAU === 0) continue;
+                // X축 눈금선 및 모눈망 격자
+                ctx.textAlign = "center";
+                ctx.textBaseline = "top";
+                for (let xAU = -Math.floor(limit/stepAU)*stepAU; xAU <= limit; xAU += stepAU) {{
                     let canvasX = centerX + (xAU * scale);
-                    if (canvasX >= startX && canvasX <= startX + plotWidth) {{
-                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
-                        ctx.beginPath(); ctx.moveTo(canvasX, startY); ctx.lineTo(canvasX, startY + plotHeight); ctx.stroke();
+                    if (canvasX >= paddingLeft && canvasX <= paddingLeft + plotWidth) {{
+                        ctx.strokeStyle = xAU === 0 ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.03)';
+                        ctx.beginPath(); ctx.moveTo(canvasX, paddingTop); ctx.lineTo(canvasX, paddingTop + plotHeight); ctx.stroke();
                         
+                        // 💡 눈금 숫자 옆에 직접 AU 단위 노출
                         ctx.fillStyle = '#888888';
-                        ctx.fillText(xAU.toFixed(limit < 1 ? 2 : 0), canvasX, startY + plotHeight + 5);
+                        let decimals = stepAU < 1 ? (stepAU < 0.1 ? 2 : 1) : 0;
+                        ctx.fillText(xAU.toFixed(decimals) + " AU", canvasX, paddingTop + plotHeight + 6);
+                        
                         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-                        ctx.beginPath(); ctx.moveTo(canvasX, startY + plotHeight); ctx.lineTo(canvasX, startY + plotHeight + 4); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(canvasX, paddingTop + plotHeight); ctx.lineTo(canvasX, paddingTop + plotHeight + 4); ctx.stroke();
                     }}
                 }}
                 
+                // Y축 눈금선 및 모눈망 격자
                 ctx.textAlign = "right";
                 ctx.textBaseline = "middle";
-                for (let yAU = -Math.floor(limit); yAU <= limit; yAU += stepAU) {{
-                    if (yAU === 0) continue;
+                for (let yAU = -Math.floor(limit/stepAU)*stepAU; yAU <= limit; yAU += stepAU) {{
                     let canvasY = centerY - (yAU * scale);
-                    if (canvasY >= startY && canvasY <= startY + plotHeight) {{
-                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
-                        ctx.beginPath(); ctx.moveTo(startX, canvasY); ctx.lineTo(startX + plotWidth, canvasY); ctx.stroke();
+                    if (canvasY >= paddingTop && canvasY <= paddingTop + plotHeight) {{
+                        ctx.strokeStyle = yAU === 0 ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.03)';
+                        ctx.beginPath(); ctx.moveTo(paddingLeft, canvasY); ctx.lineTo(paddingLeft + plotWidth, canvasY); ctx.stroke();
                         
+                        // 💡 눈금 숫자 옆에 직접 AU 단위 노출
                         ctx.fillStyle = '#888888';
-                        ctx.fillText(yAU.toFixed(limit < 1 ? 2 : 0), startX - 8, canvasY);
+                        let decimals = stepAU < 1 ? (stepAU < 0.1 ? 2 : 1) : 0;
+                        ctx.fillText(yAU.toFixed(decimals) + " AU", paddingLeft - 8, canvasY);
+                        
                         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-                        ctx.beginPath(); ctx.moveTo(startX, canvasY); ctx.lineTo(startX - 4, canvasY); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(paddingLeft, canvasY); ctx.lineTo(paddingLeft - 4, canvasY); ctx.stroke();
                     }}
                 }}
 
-                // 💡 [수정 포인트] 눈금 숫자의 단위 (AU) 표시
-                ctx.fillStyle = '#888888';
-                ctx.fillText("AU", centerX + (maxOrbitRadius * scale) + 15, centerY + 2);
-                ctx.fillText("AU", centerX + 2, centerY - (maxOrbitRadius * scale) - 15);
+                // 테두리 경계선 마감
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+                ctx.strokeRect(paddingLeft, paddingTop, plotWidth, plotHeight);
 
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-                ctx.strokeRect(startX, startY, plotWidth, plotHeight);
-
-                // 2. 푸른색 공전 궤도선
+                // 2. 푸른색 공전 궤도선 (스케일에 고정되어 흔들림 없음)
                 ctx.save();
                 ctx.translate(centerX - (c * scale), centerY);
                 ctx.strokeStyle = '#4A90E2';
@@ -199,10 +213,10 @@ with col1:
                 
                 // 3. 중심 항성 (태양)
                 ctx.beginPath();
-                ctx.arc(centerX, centerY, Math.max(8, Math.min({star_rad} * 12, 32)), 0, 2 * Math.PI);
+                ctx.arc(centerX, centerY, Math.max(6, Math.min({star_rad} * 10, 28)), 0, 2 * Math.PI);
                 ctx.fillStyle = starColor;
                 ctx.shadowColor = starColor;
-                ctx.shadowBlur = 15;
+                ctx.shadowBlur = 12;
                 ctx.fill();
                 ctx.shadowBlur = 0;
                 ctx.strokeStyle = 'white';
@@ -218,13 +232,13 @@ with col1:
                 
                 // 5. 초록색 외계행성
                 ctx.beginPath();
-                ctx.arc(planetX, planetY, 7, 0, 2 * Math.PI);
+                ctx.arc(planetX, planetY, 6, 0, 2 * Math.PI);
                 ctx.fillStyle = '#1dd1a1';
                 ctx.fill();
                 ctx.strokeStyle = '#ffffff';
                 ctx.stroke();
                 
-                // 6. 속도 계산 및 오버레이 컴포넌트 데이터 텍스트 출력
+                // 6. 데이터 대시보드 텍스트 오버레이 출력
                 let r_p = Math.sqrt(Math.pow((planetX - centerX)/scale + c, 2) + Math.pow((planetY - centerY)/scale, 2));
                 let v_kms = 0;
                 if (r_p > 0 && (2/r_p - 1/a) > 0) {{
@@ -235,8 +249,8 @@ with col1:
                 timeLabel.innerHTML = `<b>Time: ${{currentDays.toFixed(1)}} / ${{T.toFixed(1)}} days</b>`;
                 speedLabel.innerHTML = `<b>Speed: ${{v_kms.toFixed(2)}} km/s</b>`;
                 
-                // 7. 타임라인 증가 및 무한 루프 리셋
-                let dt = T / 300; 
+                // 7. 프레임 주사
+                let dt = T / 350; 
                 currentDays += dt;
                 if (currentDays >= T) currentDays = 0;
                 
@@ -249,7 +263,7 @@ with col1:
     </html>
     """
     
-    st.components.v1.html(html_code, height=600)
+    st.components.v1.html(html_code, height=590)
 
 with col2:
     st.subheader("📊 데이터 대시보드")
