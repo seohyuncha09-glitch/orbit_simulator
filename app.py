@@ -24,11 +24,10 @@ st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wi
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
 st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 제어 패널에서 가이드선을 켜고, 메인 화면 하단 슬라이더로 줌을 조절해 보세요.")
 
-# ⚙️ 사이드바 제어 패널 (행성 선택 및 체크박스 배치)
+# ⚙️ 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
 selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
 
-# 🌍 🟢 체크박스는 다시 제어 패널(사이드바)로 이동
 show_earth_orbit = st.sidebar.checkbox("🌍 지구 궤도 비교선 표시 (1.0 AU)", value=False)
 show_habitable_zone = st.sidebar.checkbox("🟢 골디락스 존 표시 (생명체 거주 구역)", value=False)
 
@@ -51,15 +50,24 @@ star_mass = float(p_data['st_mass']) if 'st_mass' in p_data and not pd.isna(p_da
 hz_inner = 0.75 * np.sqrt(star_mass)
 hz_outer = 1.77 * np.sqrt(star_mass)
 
-def get_star_color(teff):
-    if pd.isna(teff): return '#FF9F43'
-    if teff >= 10000: return '#9bb0ff'
-    elif teff >= 7500: return '#aabfff'
-    elif teff >= 6000: return '#f8f7ff'
-    elif teff >= 5200: return '#fff4ea'
-    elif teff >= 3700: return '#ffd2a1'
-    else: return '#ff8585'
-star_color = get_star_color(star_teff)
+# 💡 표면온도에 따른 색상 및 분광형 계산 함수
+def get_star_info(teff):
+    if pd.isna(teff): 
+        return '#FF9F43', '정보 없음'
+    if teff >= 10000: 
+        return '#9bb0ff', 'O형 또는 B형 (청색 청백색 고온성)'
+    elif teff >= 7500: 
+        return '#aabfff', 'A형 (백색)'
+    elif teff >= 6000: 
+        return '#f8f7ff', 'F형 (황백색)'
+    elif teff >= 5200: 
+        return '#fff4ea', 'G형 (황색, 태양 유사형)'
+    elif teff >= 3700: 
+        return '#ffd2a1', 'K형 (오렌지색)'
+    else: 
+        return '#ff8585', 'M형 (적색 왜성 등 저온성)'
+
+star_color, star_spectral_type = get_star_info(star_teff)
 
 # ------------------------------------------
 # 레이아웃 분할 및 시각화
@@ -82,7 +90,6 @@ with col1:
             #infoOverlay {{ position: absolute; top: 15px; left: 20px; font-size: 14px; font-weight: bold; line-height: 1.5; pointer-events: none; z-index: 10; }}
             #speedText {{ color: #1dd1a1; }}
             
-            /* 💡 메인 하단 제어 패널 스타일 (줌 슬라이더만 배치) */
             #mainControls {{
                 background: #1a1a1a; padding: 15px; border-radius: 8px; margin-top: 10px;
                 display: flex; flex-direction: column; gap: 12px; border: 1px solid #333;
@@ -148,7 +155,6 @@ with col1:
             const mu = {mu};
             const starColor = "{star_color}";
             
-            // 💡 스트림릿 사이드바 체크박스 상태 변환값 바인딩
             const showEarthOrbit = {str(show_earth_orbit).lower()};
             const showHabitableZone = {str(show_habitable_zone).lower()};
             
@@ -209,7 +215,6 @@ with col1:
                 let centerX = paddingLeft + (plotWidth / 2) - (plotWidth * 0.15);
                 let centerY = paddingTop + (plotHeight / 2);
                 
-                // 1. 축 가이드 라인 및 숫자 눈금 그리기
                 ctx.lineWidth = 1;
                 ctx.font = "11px 'Segoe UI'";
                 
@@ -223,30 +228,22 @@ with col1:
                 if (limit < 1) stepAU = 0.2;
                 if (limit < 0.3) stepAU = 0.05;
 
-                // X축 눈금선
-                ctx.textAlign = "center";
-                ctx.textBaseline = "top";
                 for (let xAU = -Math.floor(limit*2/stepAU)*stepAU; xAU <= limit * 2; xAU += stepAU) {{
                     let canvasX = centerX + (xAU * scale);
                     if (canvasX >= paddingLeft && canvasX <= paddingLeft + plotWidth) {{
                         ctx.strokeStyle = Math.abs(xAU) < 0.001 ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.03)';
                         ctx.beginPath(); ctx.moveTo(canvasX, paddingTop); ctx.lineTo(canvasX, paddingTop + plotHeight); ctx.stroke();
-                        
                         ctx.fillStyle = '#888888';
                         let decimals = stepAU < 1 ? (stepAU < 0.1 ? 2 : 1) : 0;
                         ctx.fillText(xAU.toFixed(decimals) + " AU", canvasX, paddingTop + plotHeight + 6);
                     }}
                 }}
                 
-                // Y축 눈금선
-                ctx.textAlign = "right";
-                ctx.textBaseline = "middle";
                 for (let yAU = -Math.floor(limit*2/stepAU)*stepAU; yAU <= limit * 2; yAU += stepAU) {{
                     let canvasY = centerY - (yAU * scale);
                     if (canvasY >= paddingTop && canvasY <= paddingTop + plotHeight) {{
                         ctx.strokeStyle = Math.abs(yAU) < 0.001 ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.03)';
                         ctx.beginPath(); ctx.moveTo(paddingLeft, canvasY); ctx.lineTo(paddingLeft + plotWidth, canvasY); ctx.stroke();
-                        
                         ctx.fillStyle = '#888888';
                         let decimals = stepAU < 1 ? (stepAU < 0.1 ? 2 : 1) : 0;
                         ctx.fillText(yAU.toFixed(decimals) + " AU", paddingLeft - 8, canvasY);
@@ -256,7 +253,6 @@ with col1:
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
                 ctx.strokeRect(paddingLeft, paddingTop, plotWidth, plotHeight);
 
-                // 골디락스 존 구역 그리기
                 if (showHabitableZone) {{
                     ctx.save();
                     ctx.translate(centerX, centerY);
@@ -283,7 +279,6 @@ with col1:
                     ctx.restore();
                 }}
 
-                // 지구 궤도선 표시 구역
                 if (showEarthOrbit) {{
                     ctx.save();
                     ctx.translate(centerX + (earthC * scale), centerY);
@@ -294,7 +289,6 @@ with col1:
                     ctx.ellipse(0, 0, earthA * scale, earthB * scale, 0, 0, 2 * Math.PI);
                     ctx.stroke();
                     
-                    // 💡 지구 레이블은 골디락스와 안 겹치게 왼쪽(-)에 배치
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
                     ctx.font = "italic 11px 'Segoe UI'";
                     ctx.textAlign = "right";
@@ -302,7 +296,6 @@ with col1:
                     ctx.restore();
                 }}
 
-                // 2. 푸른색 외계행성 공전 궤도선
                 ctx.save();
                 ctx.translate(centerX + (c * scale), centerY);
                 ctx.strokeStyle = '#4A90E2';
@@ -313,7 +306,6 @@ with col1:
                 ctx.stroke();
                 ctx.restore();
                 
-                // 3. 중심 항성 (태양)
                 ctx.beginPath();
                 ctx.arc(centerX, centerY, Math.max(6, Math.min({star_rad} * 10 * currentZoom, 60)), 0, 2 * Math.PI);
                 ctx.fillStyle = starColor;
@@ -325,14 +317,12 @@ with col1:
                 ctx.lineWidth = 1;
                 ctx.stroke();
                 
-                // 4. 행성 위치 연산
                 let M_val = (2 * Math.PI / T) * currentDays;
                 let E = M_val + e * Math.sin(M_val) + (e*e/2) * Math.sin(2*M_val);
                 
                 let planetX = centerX + (c * scale) + (a * scale * Math.cos(E));
                 let planetY = centerY + (b * scale * Math.sin(E));
                 
-                // 5. 초록색 외계행성
                 ctx.beginPath();
                 ctx.arc(planetX, planetY, 6, 0, 2 * Math.PI);
                 ctx.fillStyle = '#1dd1a1';
@@ -340,7 +330,6 @@ with col1:
                 ctx.strokeStyle = '#ffffff';
                 ctx.stroke();
                 
-                // 6. 실시간 데이터 업데이트
                 let r_p = Math.sqrt(Math.pow((planetX - centerX)/scale, 2) + Math.pow((planetY - centerY)/scale, 2));
                 let v_kms = 0;
                 if (r_p > 0 && (2/r_p - 1/a) > 0) {{
@@ -351,7 +340,6 @@ with col1:
                 timeLabel.innerHTML = `<b>Time: ${{currentDays.toFixed(1)}} / ${{T.toFixed(1)}} days</b>`;
                 speedLabel.innerHTML = `<b>Speed: ${{v_kms.toFixed(2)}} km/s</b>`;
                 
-                // 7. 프레임 전진
                 let dt = (T / 350) * speedMultiplier; 
                 currentDays += dt;
                 if (currentDays >= T) currentDays = 0;
@@ -371,6 +359,7 @@ with col2:
     st.subheader("📊 데이터 대시보드")
     def check_val(val, unit=""): return f"{val:.3f} {unit}" if not pd.isna(val) else "정보 없음"
     star_rad_display = "정보 없음 (기본값)" if is_star_rad_missing else f"{star_rad:.3f} Solar Rad"
+    star_teff_display = f"{star_teff:.1f} K" if not pd.isna(star_teff) else "정보 없음"
     
     info_text = (
         f"### 🪐 행성 특성 정보\n"
@@ -381,6 +370,8 @@ with col2:
         f"* **행성 반지름:** `정보 없음 (화면 고정)` \n\n"
         f"### ☀️ 중심 항성(별) 정보\n"
         f"* **항성 반지름:** `{star_rad_display}` \n"
-        f"* **항성 질량:** `{check_val(p_data['st_mass'] if 'st_mass' in p_data else np.nan, 'Solar Mass')}`"
+        f"* **항성 질량:** `{check_val(p_data['st_mass'] if 'st_mass' in p_data else np.nan, 'Solar Mass')}`\n"
+        f"* **항성 표면온도:** `{star_teff_display}`\n"
+        f"* **항성 분광형:** ` {star_spectral_type} `" # 💡 분광형 정보 출력 코드 추가
     )
     st.markdown(info_text)
