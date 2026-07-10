@@ -63,7 +63,7 @@ star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
 star_color, spectral_type = get_star_color_and_type(star_teff)
 
 # ------------------------------------------
-# 💡 모든 프레임 위치 및 속도 계산
+# 모든 프레임 위치 및 속도 계산
 # ------------------------------------------
 num_frames = 120
 times = np.linspace(0, T, num_frames)
@@ -92,18 +92,18 @@ theta = np.linspace(0, 2 * np.pi, 200)
 x_orbit = a * np.cos(theta) - c
 y_orbit = b * np.sin(theta)
 
-# 크기 및 축 범위 매핑
+# 💡 [해결 1] 너무 크게 나오던 항성의 크기 스케일을 시각적으로 안전하게 축소
 if fix_scale:
     x_range = [-FIXED_LIMIT, FIXED_LIMIT]
     y_range = [-FIXED_LIMIT, FIXED_LIMIT]
-    star_size = np.clip(star_rad * 10, 8, 80)
-    planet_size = 6
+    star_size = np.clip(star_rad * 3, 5, 40)
+    planet_size = 5
 else:
     limit = a * 1.3
     x_range = [-limit - c, limit - c]
     y_range = [-limit, limit]
-    star_size = np.clip(star_rad * 35, 18, 150)
-    planet_size = 10
+    star_size = np.clip(star_rad * 12, 10, 60)
+    planet_size = 8
 
 # ------------------------------------------
 # 레이아웃 분할 및 시각화
@@ -117,10 +117,10 @@ with col1:
     
     # 기본 레이어 추가
     fig.add_trace(go.Scatter(x=x_orbit, y=y_orbit, mode='lines', line=dict(color='#4A90E2', width=1.5, dash='dash'), name='Orbit'))
-    fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(color=star_color, size=star_size, line=dict(color='white', width=1)), name='Star'))
+    fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(color=star_color, size=star_size, line=dict(color='white', width=0.5)), name='Star'))
     fig.add_trace(go.Scatter(x=[x_coords[0]], y=[y_coords[0]], mode='markers', marker=dict(color='#1dd1a1', size=planet_size), name='Planet'))
     
-    # 💡 [해결 책] 괄호 꼬임을 원천 차단하기 위해 복잡한 리스트 축약식을 일반 for 루프로 해체 빌드
+    # 프레임 데이터 리스트 구축
     frames_list = []
     for i in range(num_frames):
         frame_data = [
@@ -136,9 +136,17 @@ with col1:
         
     fig.frames = frames_list
     
-    # 컨트롤 UI 설정
-    play_button = {"label": "▶ Play", "method": "animate", "args": [None, {"frame": {"duration": 25, "redraw": False}, "fromcurrent": True, "transition": {"duration": 0}}]}
-    pause_button = {"label": "⏸ Pause", "method": "animate", "args": [[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}]}
+    # 💡 [해결 2] "loop": True 설정을 추가하여 한 바퀴 돌고 나면 멈추지 않고 계속 공전하도록 수정
+    play_button = {
+        "label": "▶ Play", 
+        "method": "animate", 
+        "args": [None, {"frame": {"duration": 25, "redraw": False}, "fromcurrent": True, "transition": {"duration": 0}, "loop": True}]
+    }
+    pause_button = {
+        "label": "⏸ Pause", 
+        "method": "animate", 
+        "args": [[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}]
+    }
     
     menu_dict = {
         "type": "buttons",
@@ -172,8 +180,9 @@ with col1:
         template="plotly_dark",
         paper_bgcolor="#111111",
         plot_bgcolor="#111111",
-        xaxis=dict(range=x_range, title="X Distance (AU)", gridcolor="rgba(128,128,128,0.15)", scaleanchor="y", scaleratio=1),
-        yaxis=dict(range=y_range, title="Y Distance (AU)", gridcolor="rgba(128,128,128,0.15)"),
+        # 💡 [해결 3] 무의미하게 공간을 가르던 하얀색 가로/세로 기준선(showzeroline)을 완전히 제거
+        xaxis=dict(range=x_range, title="X Distance (AU)", gridcolor="rgba(128,128,128,0.15)", scaleanchor="y", scaleratio=1, showzeroline=False),
+        yaxis=dict(range=y_range, title="Y Distance (AU)", gridcolor="rgba(128,128,128,0.15)", showzeroline=False),
         width=700,
         height=650,
         showlegend=False,
