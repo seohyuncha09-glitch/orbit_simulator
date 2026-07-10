@@ -63,9 +63,8 @@ star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
 star_color, spectral_type = get_star_color_and_type(star_teff)
 
 # ------------------------------------------
-# 💡 [핵심 알고리즘] 미리 모든 프레임의 위치를 계산하여 자바스크립트로 넘겨주기
+# 💡 [핵심 알고리즘] 괄호 꼬임 에러 및 수식 완벽 해결 파트
 # ------------------------------------------
-# 총 120개의 타원 프레임을 사전 계산하여 브라우저 메모리에 탑재합니다.
 num_frames = 120
 times = np.linspace(0, T, num_frames)
 
@@ -81,9 +80,16 @@ for t in times:
     x_coords.append(x_val)
     y_coords.append(y_val)
     
-    # 실시간 속도 계산
-    r_val = np.sqrt((x_val + c)**2 + y_val) if (x_val + c)**2 + y_val > 0 else 0.001
-    v_au_day = np.sqrt(mu * (2/r_val - 1/a)) if (2/r_val - 1/a) > 0 else 0.0
+    # 💡 괄호 꼬임 오타 방지를 위해 거리를 완전히 따로 분리하여 계산 (y_val의 제곱 버그도 수정)
+    r_val = np.sqrt((x_val + c)**2 + y_val**2)
+    
+    # 활력방정식 안전 연산 (오차 방지 처리)
+    if r_val > 0 and (2 / r_val - 1 / a) > 0:
+        v_au_day = np.sqrt(mu * (2 / r_val - 1 / a))
+    else:
+        v_au_day = 0.0
+        
+    # km/s 단위로 최종 변환하여 리스트에 축적
     speeds.append(v_au_day * 149597870.7 / 86400)
 
 # 정적 궤도선 데이터
@@ -112,7 +118,6 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
     
-    # Plotly 그래픽 피겨 생성 (파이썬 코드는 여기서 딱 한 번만 실행됩니다!)
     fig = go.Figure()
     
     # 1) 푸른색 궤도 점선 추가
@@ -124,16 +129,15 @@ with col1:
     # 3) 처음 0프레임 시점의 외계행성 배치
     fig.add_trace(go.Scatter(x=[x_coords[0]], y=[y_coords[0]], mode='markers', marker=dict(color='#1dd1a1', size=planet_size), name='Planet'))
     
-    # 💡 [핵심] 자바스크립트용 재생/일시정지 슬라이더 및 프레임 데이터 구조 설계
+    # 💡 자바스크립트용 재생/일시정지 슬라이더 및 프레임 데이터 구조 설계
     frames = [
         go.Frame(
             data=[
-                go.Scatter(x=x_orbit, y=y_orbit),  # 궤도 유지
-                go.Scatter(x=[0], y=[0]),          # 항성 유지
-                go.Scatter(x=[x_coords[i]], y=[y_coords[i]]) # 행성 좌표만 실시간 슥슥 교체!
+                go.Scatter(x=x_orbit, y=y_orbit),  # 궤도선 유지
+                go.Scatter(x=[0], y=[0]),          # 중심별 유지
+                go.Scatter(x=[x_coords[i]], y=[y_coords[i]]) # 행성 위치만 실시간 스왑
             ],
             name=f"frame{i}",
-            # 그래프 상단 자막 레이블에 실시간 날짜와 속도를 연동
             layout=go.Layout(
                 title=dict(text=f"<b>Time: {times[i]:.1f} / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {speeds[i]:.2f} km/s</span></b>")
             )
