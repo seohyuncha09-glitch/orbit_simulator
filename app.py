@@ -22,7 +22,7 @@ except Exception as e:
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 상단 레이블과 재생/멈춤 제어가 포함된 최종 웹 가속 버전입니다.")
+st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 궤도 크기에 따라 축 범위가 자동으로 확장되며 숫자 눈금이 표시됩니다.")
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
@@ -61,7 +61,7 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
     
-    # 💡 브라우저 내장 자바스크립트로 그리는 자막 + 재생 제어 컴포넌트 HTML
+    # 💡 자바스크립트 내부에 가변 축 스케일링 및 숫자 눈금 그리기 로직 추가
     html_code = f"""
     <!DOCTYPE html>
     <html>
@@ -70,10 +70,8 @@ with col1:
             body {{ background-color: #111111; margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; }}
             #container {{ position: relative; width: 700px; height: 580px; margin: 0 auto; }}
             canvas {{ background: #111111; display: block; }}
-            /* UI 텍스트 오버레이 디자인 */
             #infoOverlay {{ position: absolute; top: 15px; left: 20px; font-size: 15px; font-weight: bold; line-height: 1.5; pointer-events: none; }}
             #speedText {{ color: #1dd1a1; }}
-            /* 제어 버튼 디자인 */
             #controlBtn {{ 
                 position: absolute; bottom: 15px; left: 20px; 
                 background: #111111; border: 1px solid #555555; color: white; 
@@ -100,7 +98,6 @@ with col1:
             const speedLabel = document.getElementById('speedText');
             const controlBtn = document.getElementById('controlBtn');
             
-            // 파이썬 상수를 자바스크립트로 바인딩
             const a = {a};
             const e = {e};
             const b = {b};
@@ -109,37 +106,92 @@ with col1:
             const mu = {mu};
             const starColor = "{star_color}";
             
-            // 자동 축 고정 계산 스케일
-            const limit = a * (1 + e) * 1.3;
-            const scale = (canvas.width / 2) / limit;
+            // 💡 [가변 범위 핵심] 행성 궤도의 최대 반경(원점 기준 원일점 거리)을 계산해 여유 있게 여백(1.4배)을 둡니다.
+            const maxOrbitRadius = a * (1 + e);
+            const limit = maxOrbitRadius * 1.4;
             
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2 + 20; // 텍스트 공간 확보를 위해 살짝 아래로 중심 이동
+            // 패딩(여백)을 고려해 그리기 영역 제한 (눈금 표시용 공간 좌측/하단 40px 확보)
+            const plotWidth = canvas.width - 60;
+            const plotHeight = canvas.height - 60;
+            const startX = 50;
+            const startY = 20;
             
-            let currentDays = 0; // 경과 일수 계산 트리거
-            let isPlaying = true; // 재생 제어 플래그
+            // 1 AU가 화면에서 차지할 픽셀 가동 스케일
+            const scale = (plotWidth / 2) / limit;
             
-            // 재생 / 일시정지 토글 함수
+            // 천체 시스템의 정중앙 좌표 (이전과 달리 축 눈금 공간 때문에 약간 시프트)
+            const centerX = startX + (plotWidth / 2);
+            const centerY = startY + (plotHeight / 2);
+            
+            let currentDays = 0;
+            let isPlaying = true;
+            
             controlBtn.addEventListener('click', () => {{
                 isPlaying = !isPlaying;
                 controlBtn.textContent = isPlaying ? "⏸ Pause" : "▶ Play";
-                if (isPlaying) draw(); // 다시 재생 시 애니메이션 루프 재가동
+                if (isPlaying) draw();
             }});
 
             function draw() {{
-                if (!isPlaying) return; // 일시정지 상태면 그리기 중단
+                if (!isPlaying) return;
 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
-                // 1. 모눈망 배경
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
+                // 💡 1. 축 가이드 라인 및 숫자 눈금 그리기
                 ctx.lineWidth = 1;
-                for(let i=0; i<canvas.width; i+=50) {{
-                    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
-                    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
+                ctx.font = "11px 'Segoe UI'";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "top";
+                
+                // 적절한 눈금 간격(AU 단위) 자동 설정
+                let stepAU = 1;
+                if (limit > 5) stepAU = 2;
+                if (limit > 15) stepAU = 5;
+                if (limit > 50) stepAU = 20;
+                if (limit > 200) stepAU = 50;
+                if (limit < 0.5) stepAU = 0.1;
+
+                // X축 눈금선 및 모눈망 격자
+                for (let xAU = -Math.floor(limit); xAU <= limit; xAU += stepAU) {{
+                    if (xAU === 0) continue;
+                    let canvasX = centerX + (xAU * scale);
+                    if (canvasX >= startX && canvasX <= startX + plotWidth) {{
+                        // 세로 격자 그리드
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+                        ctx.beginPath(); ctx.moveTo(canvasX, startY); ctx.lineTo(canvasX, startY + plotHeight); ctx.stroke();
+                        
+                        // 하단 X축 숫자 눈금 표시
+                        ctx.fillStyle = '#888888';
+                        ctx.fillText(xAU.toFixed(limit < 1 ? 1 : 0), canvasX, startY + plotHeight + 5);
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                        ctx.beginPath(); ctx.moveTo(canvasX, startY + plotHeight); ctx.lineTo(canvasX, startY + plotHeight + 4); ctx.stroke();
+                    }}
                 }}
                 
-                // 2. 푸른색 공전 궤도선
+                // Y축 눈금선 및 모눈망 격자
+                ctx.textAlign = "right";
+                ctx.textBaseline = "middle";
+                for (let yAU = -Math.floor(limit); yAU <= limit; yAU += stepAU) {{
+                    if (yAU === 0) continue;
+                    let canvasY = centerY - (yAU * scale); // 캔버스는 상단이 (-)이므로 보정
+                    if (canvasY >= startY && canvasY <= startY + plotHeight) {{
+                        // 가로 격자 그리드
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+                        ctx.beginPath(); ctx.moveTo(startX, canvasY); ctx.lineTo(startX + plotWidth, canvasY); ctx.stroke();
+                        
+                        // 좌측 Y축 숫자 눈금 표시
+                        ctx.fillStyle = '#888888';
+                        ctx.fillText(yAU.toFixed(limit < 1 ? 1 : 0), startX - 8, canvasY);
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                        ctx.beginPath(); ctx.moveTo(startX, canvasY); ctx.lineTo(startX - 4, canvasY); ctx.stroke();
+                    }}
+                }}
+
+                // 메인 바깥 외곽 축선 그리기 (Border)
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+                ctx.strokeRect(startX, startY, plotWidth, plotHeight);
+
+                // 2. 푸른색 공전 궤도선 (축 락이 걸린 상태에서 타원 이동)
                 ctx.save();
                 ctx.translate(centerX - (c * scale), centerY);
                 ctx.strokeStyle = '#4A90E2';
@@ -152,7 +204,7 @@ with col1:
                 
                 // 3. 중심 항성 (태양)
                 ctx.beginPath();
-                ctx.arc(centerX, centerY, Math.max(8, Math.min({star_rad} * 12, 35)), 0, 2 * Math.PI);
+                ctx.arc(centerX, centerY, Math.max(8, Math.min({star_rad} * 12, 32)), 0, 2 * Math.PI);
                 ctx.fillStyle = starColor;
                 ctx.shadowColor = starColor;
                 ctx.shadowBlur = 15;
@@ -162,9 +214,9 @@ with col1:
                 ctx.lineWidth = 1;
                 ctx.stroke();
                 
-                // 4. 경과 시간을 이용한 평균 근점 이각(M) 구하기 및 케플러 방정식 풀이
+                // 4. 행성 위치 연산
                 let M_val = (2 * Math.PI / T) * currentDays;
-                let E = M_val + e * Math.sin(M_val) + (e*e/2) * Math.sin(2*M_val); // 근사식 이용
+                let E = M_val + e * Math.sin(M_val) + (e*e/2) * Math.sin(2*M_val);
                 
                 let planetX = centerX - (c * scale) + (a * scale * Math.cos(E));
                 let planetY = centerY + (b * scale * Math.sin(E));
@@ -177,7 +229,7 @@ with col1:
                 ctx.strokeStyle = '#ffffff';
                 ctx.stroke();
                 
-                // 6. 실시간 궤도 속도 물리 연산 및 레이블 글씨 갱신
+                // 6. 속도 계산 및 오버레이 컴포넌트 데이터 텍스트 출력
                 let r_p = Math.sqrt(Math.pow((planetX - centerX)/scale + c, 2) + Math.pow((planetY - centerY)/scale, 2));
                 let v_kms = 0;
                 if (r_p > 0 && (2/r_p - 1/a) > 0) {{
@@ -188,22 +240,21 @@ with col1:
                 timeLabel.innerHTML = `<b>Time: ${{currentDays.toFixed(1)}} / ${{T.toFixed(1)}} days</b>`;
                 speedLabel.innerHTML = `<b>Speed: ${{v_kms.toFixed(2)}} km/s</b>`;
                 
-                // 7. 시간 간격 증가 및 무한 루프 처리
-                let dt = T / 250; // 속도가 너무 빠르면 분모 숫자를 키우세요
+                // 7. 타임라인 증가 및 무한 루프 리셋
+                let dt = T / 300; 
                 currentDays += dt;
-                if (currentDays >= T) currentDays = 0; // 한 바퀴 끝나면 0초로 자동 리셋
+                if (currentDays >= T) currentDays = 0;
                 
                 requestAnimationFrame(draw);
             }}
             
-            // 즉시 구동
             draw();
         </script>
     </body>
     </html>
     """
     
-    st.components.v1.html(html_code, height=590)
+    st.components.v1.html(html_code, height=600)
 
 with col2:
     st.subheader("📊 데이터 대시보드")
