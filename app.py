@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import fsolve
 import plotly.graph_objects as go
+import time
 
 # ==========================================
 # 1. 데이터 불러오기
@@ -34,12 +35,18 @@ def solve_kepler(M, e):
     return fsolve(func, M)[0]
 
 # ==========================================
-# 2. 웹 UI 구성
+# 2. 웹 UI 구성 및 세션 상태 정의
 # ==========================================
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 브라우저 자체 애니메이션 렌더링을 적용해 부하를 최소화한 버전입니다.")
+st.markdown("NASA 아카이브 데이터를 기반으로 부하 없이 완벽한 무한 공전 루프가 적용된 버전입니다.")
+
+# 💡 실시간 무한 루프 제어를 위한 핵심 세션 타이머 변수
+if 'current_time' not in st.session_state:
+    st.session_state.current_time = 0.0
+if 'is_playing' not in st.session_state:
+    st.session_state.is_playing = True
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
@@ -62,32 +69,34 @@ star_rad = 1.0 if is_star_rad_missing else float(p_data['st_rad'])
 star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
 star_color, spectral_type = get_star_color_and_type(star_teff)
 
-# ------------------------------------------
-# 모든 프레임 위치 및 속도 계산
-# ------------------------------------------
-num_frames = 120
-times = np.linspace(0, T, num_frames)
+# 💡 애니메이션 재생 상태 토글 버튼
+if st.sidebar.button("▶ 재생 / ⏸ 일시정지 토글"):
+    st.session_state.is_playing = not st.session_state.is_playing
 
-x_coords = []
-y_coords = []
-speeds = []
+# ------------------------------------------
+# 💡 [핵심 최적화] 무한 루프를 도는 현재 프레임의 위치 계산
+# ------------------------------------------
+# 공전 주기에 맞춰 한 프레임에 전진할 시간 단위(dt) 결정
+dt = T / 100 if T > 0 else 1.0
 
-for i in range(num_frames):
-    t = times[i]
-    M = (2 * np.pi / T) * t
-    E = solve_kepler(M, e)
-    x_val = a * np.cos(E) - c
-    y_val = b * np.sin(E)
-    x_coords.append(x_val)
-    y_coords.append(y_val)
-    
-    r_val = np.sqrt((x_val + c)**2 + y_val**2)
-    if r_val > 0 and (2 / r_val - 1 / a) > 0:
-        v_au_day = np.sqrt(mu * (2 / r_val - 1 / a))
-    else:
-        v_au_day = 0.0
-        
-    speeds.append(v_au_day * 149597870.7 / 86400)
+# 만약 재생 상태라면 시간에 dt를 더해줌 (한 바퀴 돌면 0으로 완벽 리셋!)
+if st.session_state.is_playing:
+    st.session_state.current_time += dt
+    if st.session_state.current_time >= T:
+        st.session_state.current_time = 0.0
+
+# 현재 타이밍의 행성 위치 및 속도 실시간 연산
+M = (2 * np.pi / T) * st.session_state.current_time
+E = solve_kepler(M, e)
+x_val = a * np.cos(E) - c
+y_val = b * np.sin(E)
+
+r_val = np.sqrt((x_val + c)**2 + y_val**2)
+if r_val > 0 and (2 / r_val - 1 / a) > 0:
+    v_au_day = np.sqrt(mu * (2 / r_val - 1 / a))
+else:
+    v_au_day = 0.0
+v_kms = v_au_day * 149597870.7 / 86400
 
 # 정적 궤도선 데이터
 theta = np.linspace(0, 2 * np.pi, 200)
@@ -115,89 +124,26 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
     
+    # 정적 차트만 출력하되, 시간의 변화를 Plotly가 가볍게 새로 갱신합니다.
     fig = go.Figure()
     
-    # 기본 레이어 추가
+    # 1) 궤도선
     fig.add_trace(go.Scatter(x=x_orbit, y=y_orbit, mode='lines', line=dict(color='#4A90E2', width=1.5, dash='dash'), name='Orbit'))
+    # 2) 중심 항성
     fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(color=star_color, size=star_size, line=dict(color='white', width=1)), name='Star'))
-    fig.add_trace(go.Scatter(x=[x_coords[0]], y=[y_coords[0]], mode='markers', marker=dict(color='#1dd1a1', size=planet_size), name='Planet'))
-    
-    # 프레임 리스트 생성
-    frames_list = []
-    for i in range(num_frames):
-        frame_data = [
-            go.Scatter(x=x_orbit, y=y_orbit),
-            go.Scatter(x=[0], y=[0]),
-            go.Scatter(x=[x_coords[i]], y=[y_coords[i]])
-        ]
-        frame_layout = go.Layout(
-            title=dict(text=f"<b>Time: {times[i]:.1f} / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {speeds[i]:.2f} km/s</span></b>")
-        )
-        single_frame = go.Frame(data=frame_data, name=f"frame{i}", layout=frame_layout)
-        frames_list.append(single_frame)
-        
-    fig.frames = frames_list
-    
-    # 💡 [수정 핵심] 슬라이더 컴포넌트와 프레임 간의 무한 동기화 루프 트리거 설정
-    play_button = {
-        "label": "▶ Play", 
-        "method": "animate", 
-        "args": [None, {
-            "frame": {"duration": 25, "redraw": False}, 
-            "fromcurrent": True, 
-            "transition": {"duration": 0},
-            "mode": "immediate"
-        }]
-    }
-    pause_button = {
-        "label": "⏸ Pause", 
-        "method": "animate", 
-        "args": [[None], {
-            "frame": {"duration": 0, "redraw": False}, 
-            "mode": "immediate", 
-            "transition": {"duration": 0}
-        }]
-    }
-    
-    menu_dict = {
-        "type": "buttons",
-        "direction": "left",
-        "pad": {"r": 10, "t": 10},
-        "showactive": False,
-        "x": 0.05, "xanchor": "left", "y": -0.1, "yanchor": "top",
-        "buttons": [play_button, pause_button]
-    }
-    
-    steps_list = []
-    for i in range(num_frames):
-        step = {
-            "args": [[f"frame{i}"], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}],
-            "label": f"{times[i]:.1f}",
-            "method": "animate"
-        }
-        steps_list.append(step)
-        
-    slider_dict = {
-        "active": 0,
-        "yanchor": "top", "xanchor": "left",
-        "currentvalue": {"font": {"size": 12, "color": "white"}, "prefix": "Day: ", "visible": True, "xanchor": "right"},
-        "transition": {"duration": 0},
-        "pad": {"b": 10, "t": 50}, "len": 0.9, "x": 0.05, "y": -0.15,
-        "steps": steps_list
-    }
+    # 3) 행성 실시간 좌표 위치 매핑
+    fig.add_trace(go.Scatter(x=[x_val], y=[y_val], mode='markers', marker=dict(color='#1dd1a1', size=planet_size), name='Planet'))
     
     fig.update_layout(
-        title=dict(text=f"<b>Time: 0.0 / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {speeds[0]:.2f} km/s</span></b>", x=0.05, y=0.95, font=dict(color='white', size=14)),
+        title=dict(text=f"<b>Time: {st.session_state.current_time:.1f} / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {v_kms:.2f} km/s</span></b>", x=0.05, y=0.95, font=dict(color='white', size=14)),
         template="plotly_dark",
         paper_bgcolor="#111111",
         plot_bgcolor="#111111",
         xaxis=dict(range=x_range, title="X Distance (AU)", gridcolor="rgba(128,128,128,0.15)", scaleanchor="y", scaleratio=1),
         yaxis=dict(range=y_range, title="Y Distance (AU)", gridcolor="rgba(128,128,128,0.15)"),
         width=700,
-        height=650,
-        showlegend=False,
-        updatemenus=[menu_dict],
-        sliders=[slider_dict]
+        height=600,
+        showlegend=False
     )
     
     if is_star_rad_missing:
@@ -224,3 +170,8 @@ with col2:
         f"* **항성 질량:** `{check_val(p_data['st_mass'] if 'st_mass' in p_data else np.nan, 'Solar Mass')}`"
     )
     st.markdown(info_text)
+
+# 💡 [무한 루프 핵심] 부하 방지를 위해 0.04초(약 25 FPS) 쉬어준 뒤 화면을 강제로 계속 다시 그립니다.
+if st.session_state.is_playing:
+    time.sleep(0.04)
+    st.rerun()
