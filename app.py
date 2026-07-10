@@ -114,7 +114,7 @@ def run_simulation_fragment():
         
         fig = go.Figure()
         
-        # 기본 배치 레이어
+        # 기본 배치 레이어 (초기 위치)
         fig.add_trace(go.Scatter(x=x_orbit, y=y_orbit, mode='lines', line=dict(color='#4A90E2', width=1.5, dash='dash'), name='Orbit'))
         fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(color=star_color, size=star_size, line=dict(color='white', width=1)), name='Star'))
         fig.add_trace(go.Scatter(x=[x_coords[0]], y=[y_coords[0]], mode='markers', marker=dict(color='#1dd1a1', size=planet_size), name='Planet'))
@@ -153,6 +153,7 @@ def run_simulation_fragment():
             "steps": steps_list
         }
         
+        # 💡 [해결 핵심] 에러 나던 잘못된 구문을 삭제하고, updatemenus의 'active' 값을 활용해 로드되자마자 자동 실행 유도
         fig.update_layout(
             title=dict(text=f"<b>Time: 0.0 / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {speeds[0]:.2f} km/s</span></b>", x=0.05, y=0.95, font=dict(color='white', size=14)),
             template="plotly_dark",
@@ -163,31 +164,25 @@ def run_simulation_fragment():
             width=750,
             height=650,
             showlegend=False,
-            # 💡 버튼 메뉴를 아예 숨겨서(지워버려서) 화면을 아주 깔끔하게 만듭니다.
-            updatemenus=[], 
+            
+            # 눈에 보이지 않는 자동 재생 트리거 메뉴 배치
+            updatemenus=[{
+                "type": "buttons",
+                "showactive": True,
+                "active": 0, # 페이지 로드 시 첫 번째 버튼(재생)을 기본 활성화 상태로 강제 주입
+                "x": -1, "y": -1, # 화면 외부로 숨김
+                "buttons": [{
+                    "label": "AutoPlay",
+                    "method": "animate",
+                    "args": [None, {
+                        "frame": {"duration": 30, "redraw": False, "loop": True}, 
+                        "fromcurrent": True,
+                        "transition": {"duration": 0}
+                    }]
+                }]
+            }],
             sliders=[slider_config]
         )
-        
-        # 💡 [핵심 수정] 사용자가 마우스를 대지 않아도 로드 즉시 무한 루프 재생되도록 브라우저 명령 하이재킹
-        fig.on_edits_completed(None) 
-        fig.update_layout(
-            # 자바스크립트 내부 타임라인 디폴트 플레이 플래그 활성화
-            template="plotly_dark"
-        )
-        # 하단 자바스크립트 슬라이더 자체에 강제 무한 재생 스크립트 연결 효과 부여
-        slider_config["transition"] = {"duration": 0, "easing": "linear"}
-        
-        # 💡 지저분한 버튼 대신, Plotly 그래프 자체 설정에 자동 실행 및 무한 루프 옵션을 바로 매핑합니다.
-        fig['layout']['updatemenus'] = [{
-            "type": "buttons",
-            "buttons": [{
-                "args": [None, {"frame": {"duration": 30, "redraw": False, "loop": True}, "fromcurrent": True}],
-                "label": "",
-                "method": "animate"
-            }],
-            # 버튼을 화면 밖 먼 곳으로 배치해 눈에 보이지 않는 '자동 실행 트리거'로만 활용합니다.
-            "x": -1, "y": -1, "showactive": False 
-        }]
         
         if is_star_rad_missing:
             st.warning("⚠️ 항성 반지름 데이터가 없어 기본 크기(1.0 Solar Rad)로 표시 중입니다.")
