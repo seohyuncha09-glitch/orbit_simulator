@@ -22,7 +22,7 @@ except Exception as e:
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 타원 궤도의 중심이 모눈망 정중앙에 오도록 물리 좌표계를 튜닝했습니다.")
+st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 항성이 중심에 고정되며, 궤도가 잘리지 않도록 화면이 왼쪽으로 자동 시프트됩니다.")
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
@@ -105,7 +105,7 @@ with col1:
             const mu = {mu};
             const starColor = "{star_color}";
             
-            // 패딩 영역 제한 설정
+            // 패딩 설정
             const paddingLeft = 70;
             const paddingRight = 40;
             const paddingTop = 40;
@@ -114,12 +114,14 @@ with col1:
             const plotWidth = canvas.width - (paddingLeft + paddingRight);
             const plotHeight = canvas.height - (paddingTop + paddingBottom);
             
-            // 💡 [해결 포인트 1] 궤도 자차의 장반경(a)을 기준으로 여유치(1.3배)를 두어 스케일 산정
-            const limit = a * 1.3;
+            // 💡 [해결 포인트 1] 항성이 중심일 때 오른쪽으로 최대 반경은 a + c (원일점)입니다.
+            // 이 전체 반경이 화면 오른쪽 영역 안에 무조건 들어오도록 한계값(limit)을 보수적으로 잡습니다.
+            const limit = (a + c) * 1.3;
             const scale = Math.min(plotWidth, plotHeight) / (2 * limit);
             
-            // 💡 [해결 포인트 2] 캔버스의 좌표평면 정중앙을 타원의 완벽한 기하학적 중심(0,0)으로 잡음
-            const centerX = paddingLeft + (plotWidth / 2);
+            // 💡 [해결 포인트 2] 항성(0,0)의 위치를 화면 정중앙이 아니라, 
+            // 오른쪽으로 길어지는 궤도를 고려해 왼쪽으로 시프트(-plotWidth * 0.15)해 줍니다.
+            const centerX = paddingLeft + (plotWidth / 2) - (plotWidth * 0.15);
             const centerY = paddingTop + (plotHeight / 2);
             
             let currentDays = 0;
@@ -136,7 +138,7 @@ with col1:
 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
-                // 1. 축 가이드 라인 및 숫자 눈금 그리기 (눈금 단위 최적화)
+                // 1. 축 가이드 라인 및 숫자 눈금 그리기
                 ctx.lineWidth = 1;
                 ctx.font = "11px 'Segoe UI'";
                 
@@ -150,10 +152,11 @@ with col1:
                 if (limit < 1) stepAU = 0.2;
                 if (limit < 0.3) stepAU = 0.05;
 
-                // X축 눈금선 및 모눈망 격자 (중심이 0,0이 되도록 배치)
+                // X축 눈금선 (항성 centerX 기준)
                 ctx.textAlign = "center";
                 ctx.textBaseline = "top";
-                for (let xAU = -Math.floor(limit/stepAU)*stepAU; xAU <= limit; xAU += stepAU) {{
+                // 왼쪽 시프트 되었으므로 더 넓은 범위를 커버하도록 가이드라인 반복문 범위 확장
+                for (let xAU = -Math.floor(limit*2/stepAU)*stepAU; xAU <= limit * 2; xAU += stepAU) {{
                     let canvasX = centerX + (xAU * scale);
                     if (canvasX >= paddingLeft && canvasX <= paddingLeft + plotWidth) {{
                         ctx.strokeStyle = Math.abs(xAU) < 0.001 ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.03)';
@@ -162,16 +165,13 @@ with col1:
                         ctx.fillStyle = '#888888';
                         let decimals = stepAU < 1 ? (stepAU < 0.1 ? 2 : 1) : 0;
                         ctx.fillText(xAU.toFixed(decimals) + " AU", canvasX, paddingTop + plotHeight + 6);
-                        
-                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-                        ctx.beginPath(); ctx.moveTo(canvasX, paddingTop + plotHeight); ctx.lineTo(canvasX, paddingTop + plotHeight + 4); ctx.stroke();
                     }}
                 }}
                 
-                // Y축 눈금선 및 모눈망 격자 (중심이 0,0이 되도록 배치)
+                // Y축 눈금선 (항성 centerY 기준)
                 ctx.textAlign = "right";
                 ctx.textBaseline = "middle";
-                for (let yAU = -Math.floor(limit/stepAU)*stepAU; yAU <= limit; yAU += stepAU) {{
+                for (let yAU = -Math.floor(limit*2/stepAU)*stepAU; yAU <= limit * 2; yAU += stepAU) {{
                     let canvasY = centerY - (yAU * scale);
                     if (canvasY >= paddingTop && canvasY <= paddingTop + plotHeight) {{
                         ctx.strokeStyle = Math.abs(yAU) < 0.001 ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.03)';
@@ -180,9 +180,6 @@ with col1:
                         ctx.fillStyle = '#888888';
                         let decimals = stepAU < 1 ? (stepAU < 0.1 ? 2 : 1) : 0;
                         ctx.fillText(yAU.toFixed(decimals) + " AU", paddingLeft - 8, canvasY);
-                        
-                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-                        ctx.beginPath(); ctx.moveTo(paddingLeft, canvasY); ctx.lineTo(paddingLeft - 4, canvasY); ctx.stroke();
                     }}
                 }}
 
@@ -190,9 +187,10 @@ with col1:
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
                 ctx.strokeRect(paddingLeft, paddingTop, plotWidth, plotHeight);
 
-                // 2. 푸른색 공전 궤도선 (정중앙 centerX, centerY에 정렬)
+                // 2. 푸른색 공전 궤도선
+                // 💡 항성이 (0,0) 중심이므로, 타원의 궤도 중심은 초점(c)만큼 오른쪽으로 이동해야 일치합니다.
                 ctx.save();
-                ctx.translate(centerX, centerY);
+                ctx.translate(centerX + (c * scale), centerY);
                 ctx.strokeStyle = '#4A90E2';
                 ctx.lineWidth = 1.5;
                 ctx.setLineDash([5, 5]);
@@ -201,13 +199,9 @@ with col1:
                 ctx.stroke();
                 ctx.restore();
                 
-                // 3. 중심 항성 (태양) 배치
-                // 💡 [중요 변화] 타원의 중심이 (0,0)이므로, 실제 태양은 초점 거리(c)만큼 왼쪽(-X축 방향)으로 밀어서 그려야 물리 법칙에 맞습니다.
-                const starX = centerX - (c * scale);
-                const starY = centerY;
-                
+                // 3. 중심 항성 (태양) - 완벽한 모눈망 원점(centerX, centerY)에 고정
                 ctx.beginPath();
-                ctx.arc(starX, starY, Math.max(6, Math.min({star_rad} * 10, 28)), 0, 2 * Math.PI);
+                ctx.arc(centerX, centerY, Math.max(6, Math.min({star_rad} * 10, 28)), 0, 2 * Math.PI);
                 ctx.fillStyle = starColor;
                 ctx.shadowColor = starColor;
                 ctx.shadowBlur = 12;
@@ -217,12 +211,12 @@ with col1:
                 ctx.lineWidth = 1;
                 ctx.stroke();
                 
-                // 4. 행성 위치 연산 (타원 중심 기준 매핑)
+                // 4. 행성 위치 연산 (항성 위치 기준 매핑)
                 let M_val = (2 * Math.PI / T) * currentDays;
                 let E = M_val + e * Math.sin(M_val) + (e*e/2) * Math.sin(2*M_val);
                 
-                // 타원 자체 방정식 기준으로 정중앙 원점 기준 좌표 구함
-                let planetX = centerX + (a * scale * Math.cos(E));
+                // 케플러 방정식 법칙에 따라 원점(항성) 기준 궤도 렌더링
+                let planetX = centerX + (c * scale) + (a * scale * Math.cos(E));
                 let planetY = centerY + (b * scale * Math.sin(E));
                 
                 // 5. 초록색 외계행성
@@ -233,8 +227,8 @@ with col1:
                 ctx.strokeStyle = '#ffffff';
                 ctx.stroke();
                 
-                // 6. 실시간 속도 연산 (태양-행성 간의 실제 물리적 거리인 r_p 기반)
-                let r_p = Math.sqrt(Math.pow((planetX - starX)/scale, 2) + Math.pow((planetY - starY)/scale, 2));
+                // 6. 실시간 속도 연산
+                let r_p = Math.sqrt(Math.pow((planetX - centerX)/scale, 2) + Math.pow((planetY - centerY)/scale, 2));
                 let v_kms = 0;
                 if (r_p > 0 && (2/r_p - 1/a) > 0) {{
                     let v_au = Math.sqrt(mu * (2/r_p - 1/a));
