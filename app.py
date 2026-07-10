@@ -106,7 +106,7 @@ theta = np.linspace(0, 2 * np.pi, 200)
 x_orbit = a * np.cos(theta) - c
 y_orbit = b * np.sin(theta)
 
-# 💡 [진짜 해결 지점] 축 범위를 소수점 4자리 순수 파이썬 float형 숫자로 강제 래핑하여 넘깁니다.
+# 축 범위 매핑 (순수 float 변환)
 if fix_scale:
     x_range = [float(-FIXED_LIMIT), float(FIXED_LIMIT)]
     y_range = [float(-FIXED_LIMIT), float(FIXED_LIMIT)]
@@ -114,13 +114,8 @@ if fix_scale:
     planet_size = 5
 else:
     limit = a * 1.3
-    x_min = round(float(-limit - c), 4)
-    x_max = round(float(limit - c), 4)
-    y_min = round(float(-limit), 4)
-    y_max = round(float(limit), 4)
-    
-    x_range = [x_min, x_max]
-    y_range = [y_min, y_max]
+    x_range = [float(-limit - c), float(limit - c)]
+    y_range = [float(-limit), float(limit)]
     star_size = np.clip(star_rad * 12, 10, 60)
     planet_size = 8
 
@@ -139,7 +134,7 @@ with col1:
     fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(color=star_color, size=star_size, line=dict(color='white', width=0.5)), name='Star'))
     fig.add_trace(go.Scatter(x=[x_coords[0]], y=[y_coords[0]], mode='markers', marker=dict(color='#1dd1a1', size=planet_size), name='Planet'))
     
-    # 프레임 데이터 리스트 구축
+    # 프레임 데이터 구축
     frames_list = []
     for i in range(num_frames):
         frame_data = [
@@ -147,8 +142,7 @@ with col1:
             go.Scatter(x=[0], y=[0]),
             go.Scatter(x=[x_coords[i]], y=[y_coords[i]])
         ]
-        single_frame = go.Frame(data=frame_data, name=f"frame{i}")
-        frames_list.append(single_frame)
+        frames_list.append(go.Frame(data=frame_data, name=f"frame{i}"))
         
     fig.frames = frames_list
     
@@ -165,10 +159,7 @@ with col1:
     )
     
     menu_dict = dict(
-        type="buttons",
-        direction="left",
-        pad={"r": 10, "t": 10},
-        showactive=False,
+        type="buttons", direction="left", showactive=False,
         x=0.05, xanchor="left", y=-0.1, yanchor="top",
         buttons=[play_button, pause_button]
     )
@@ -183,30 +174,29 @@ with col1:
         steps_list.append(step)
         
     slider_dict = dict(
-        active=0,
-        yanchor="top", xanchor="left",
+        active=0, yanchor="top", xanchor="left",
         currentvalue={"font": {"size": 13, "color": "#1dd1a1"}, "prefix": "Orbital Status — ", "visible": True, "xanchor": "left"},
-        transition={"duration": 0},
-        pad={"b": 10, "t": 40}, len=0.9, x=0.05, y=-0.12,
+        transition={"duration": 0}, pad={"b": 10, "t": 40}, len=0.9, x=0.05, y=-0.12,
         steps=steps_list
     )
     
-    # 레이아웃 최종 반영
-    fig.update_layout(
-        title=dict(text=f"<b>🪐 {selected_planet} Orbit (Period: {T:.1f} days)</b>", x=0.05, y=0.95, font=dict(color='white', size=15)),
-        template="plotly_dark",
-        paper_bgcolor="#111111",
-        plot_bgcolor="#111111",
-        xaxis=dict(range=x_range, title="X Distance (AU)", gridcolor="rgba(128,128,128,0.15)", scaleanchor="y", scaleratio=1, showzeroline=False),
-        yaxis=dict(range=y_range, title="Y Distance (AU)", gridcolor="rgba(128,128,128,0.15)", showzeroline=False),
-        width=700,
-        height=650,
-        showlegend=False
-    )
+    # 💡 [핵심 버그 수정] update_layout을 완전히 우회하고 파이썬 기본 사전(dict) 구조로 덮어씌웁니다.
+    # 크래시를 유발하던 'scaleanchor="y"' 속성을 완벽히 제거했습니다.
+    layout_config = {
+        "title": {"text": f"<b>🪐 {selected_planet} Orbit (Period: {T:.1f} days)</b>", "x": 0.05, "y": 0.95, "font": {"color": "white", "size": 15}},
+        "template": "plotly_dark",
+        "paper_bgcolor": "#111111",
+        "plot_bgcolor": "#111111",
+        "xaxis": {"range": x_range, "title": "X Distance (AU)", "gridcolor": "rgba(128,128,128,0.15)", "showzeroline": False},
+        "yaxis": {"range": y_range, "title": "Y Distance (AU)", "gridcolor": "rgba(128,128,128,0.15)", "showzeroline": False},
+        "width": 650,   # 비율 고정 대신 가로 세로를 정확한 정사각형 픽셀로 강제 지정
+        "height": 650,
+        "showlegend": False,
+        "updatemenus": [menu_dict],
+        "sliders": [slider_dict]
+    }
     
-    # 분할 속성 주입
-    fig.layout.updatemenus = [menu_dict]
-    fig.layout.sliders = [slider_dict]
+    fig.layout = layout_config
     
     st.plotly_chart(fig, use_container_width=True)
 
