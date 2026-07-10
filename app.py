@@ -307,9 +307,13 @@ with col1:
                 ctx.restore();
                 
                 ctx.beginPath();
-let calculatedStarRad = {star_rad} * 12 * currentZoom; // 기본 크기 배율을 10에서 12로 살짝 키워 시각 효과 업!
-let finalStarRad = Math.max(5, calculatedStarRad);    // 너무 축소해서 별이 사라지는 것만 방지 (최소 5픽셀)
+let calculatedStarRad = {star_rad} * 10 * currentZoom; 
 
+// 2. 최대 제한선 자체를 줌에 비례하게 가변적으로 설정 (예: 기본 40px ~ 최대 확대 시 120px)
+let maxLimit = 40 + (currentZoom * 25); 
+
+// 3. 최소 5px 보장, 계산된 크기 적용, 단 가변 한계선(maxLimit)을 넘지 않도록 제한
+let finalStarRad = Math.max(5, Math.min(calculatedStarRad, maxLimit));
 ctx.arc(centerX, centerY, finalStarRad, 0, 2 * Math.PI);
                 ctx.fillStyle = starColor;
                 ctx.shadowColor = starColor;
