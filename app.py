@@ -11,15 +11,13 @@ import plotly.graph_objects as go
 def load_data():
     df_raw = pd.read_csv("PS_data.csv")
     
-    # 💡 [진짜 해결책] 연산 및 대시보드 출력에 필요한 모든 물리 컬럼을 검사합니다.
-    # 하나라도 빈 값(NaN)이 있으면 검색 목록에서 아예 제외합니다.
+    # 필수 물리 컬럼 검사 및 결측치 제거
     required_cols = ['pl_orbsmax', 'pl_orbper', 'pl_orbeccen', 'st_rad', 'st_teff', 'st_mass']
-    
     for col in required_cols:
         if col in df_raw.columns:
             df_raw = df_raw[df_raw[col].notna()]
             
-    # 물리적으로 유효한 양수 데이터만 필터링
+    # 유효한 양수 데이터만 필터링
     df_raw = df_raw[df_raw['pl_orbsmax'] > 0]
     df_raw = df_raw[df_raw['pl_orbper'] > 0]
     df_raw = df_raw[df_raw['st_rad'] > 0]
@@ -36,7 +34,7 @@ except Exception as e:
     st.stop()
 
 if not all_planet_names:
-    st.error("⚠️ 모든 필수 물리량(장반경, 주기, 이심률, 항성 반지름/온도/질량)이 완벽히 채워진 행성 데이터가 없습니다.")
+    st.error("⚠️ 조건에 맞는 완전한 행성 데이터가 없습니다.")
     st.stop()
 
 FIXED_LIMIT = 15.0
@@ -73,20 +71,16 @@ a = float(p_data['pl_orbsmax'])
 e = float(p_data['pl_orbeccen'])
 T = float(p_data['pl_orbper'])
 
-# 타원 궤도 기하학 연산
 b = a * np.sqrt(1 - e**2)
 c = a * e
 mu = (4 * np.pi**2 * (a**3)) / (T**2)
 
-# 항성 정보 매핑
 star_rad = float(p_data['st_rad'])
 star_teff = float(p_data['st_teff'])
 star_mass = float(p_data['st_mass'])
 star_color, spectral_type = get_star_color_and_type(star_teff)
 
-# ------------------------------------------
 # 모든 프레임 위치 및 속도 계산
-# ------------------------------------------
 num_frames = 120
 times = np.linspace(0, T, num_frames)
 
@@ -156,26 +150,27 @@ with col1:
         
     fig.frames = frames_list
     
-    # 버튼 컨트롤러 설정
-    play_button = {
-        "label": "▶ Play", 
-        "method": "animate", 
-        "args": [None, {"frame": {"duration": 25, "redraw": False}, "fromcurrent": True, "transition": {"duration": 0}, "loop": True}]
-    }
-    pause_button = {
-        "label": "⏸ Pause", 
-        "method": "animate", 
-        "args": [[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}]
-    }
+    # 💡 [버그 수정의 핵심] 딕셔너리가 아닌 Plotly 공식 전용 컴포넌트 객체로 업포매팅하여 주입
+    play_button = dict(
+        label="▶ Play", 
+        method="animate", 
+        args=[None, {"frame": {"duration": 25, "redraw": False}, "fromcurrent": True, "transition": {"duration": 0}, "loop": True}]
+    )
+    pause_button = dict(
+        label="⏸ Pause", 
+        method="animate", 
+        args=[[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}]
+    )
     
-    menu_dict = {
-        "type": "buttons",
-        "direction": "left",
-        "pad": {"r": 10, "t": 10},
-        "showactive": False,
-        "x": 0.05, "xanchor": "left", "y": -0.1, "yanchor": "top",
-        "buttons": [play_button, pause_button]
-    }
+    # 전용 객체로 래핑
+    menu_obj = go.layout.Updatemenu(
+        type="buttons",
+        direction="left",
+        pad={"r": 10, "t": 10},
+        showactive=False,
+        x=0.05, xanchor="left", y=-0.1, yanchor="top",
+        buttons=[play_button, pause_button]
+    )
     
     steps_list = []
     for i in range(num_frames):
@@ -186,15 +181,17 @@ with col1:
         }
         steps_list.append(step)
         
-    slider_dict = {
-        "active": 0,
-        "yanchor": "top", "xanchor": "left",
-        "currentvalue": {"font": {"size": 12, "color": "white"}, "prefix": "Day: ", "visible": True, "xanchor": "right"},
-        "transition": {"duration": 0},
-        "pad": {"b": 10, "t": 50}, "len": 0.9, "x": 0.05, "y": -0.15,
-        "steps": steps_list
-    }
+    # 전용 객체로 래핑
+    slider_obj = go.layout.Slider(
+        active=0,
+        yanchor="top", xanchor="left",
+        currentvalue={"font": {"size": 12, "color": "white"}, "prefix": "Day: ", "visible": True, "xanchor": "right"},
+        transition={"duration": 0},
+        pad={"b": 10, "t": 50}, len=0.9, x=0.05, y=-0.15,
+        steps=steps_list
+    )
     
+    # 레이아웃 최종 반영
     fig.update_layout(
         title=dict(text=f"<b>Time: 0.0 / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {speeds[0]:.2f} km/s</span></b>", x=0.05, y=0.95, font=dict(color='white', size=14)),
         template="plotly_dark",
@@ -205,8 +202,8 @@ with col1:
         width=700,
         height=650,
         showlegend=False,
-        updatemenus=[menu_dict],
-        sliders=[slider_dict]
+        updatemenus=[menu_obj],  # 안전한 객체 형태로 전달
+        sliders=[slider_obj]     # 안전한 객체 형태로 전달
     )
     
     st.plotly_chart(fig, use_container_width=True)
@@ -214,7 +211,6 @@ with col1:
 with col2:
     st.subheader("📊 데이터 대시보드")
     
-    # 💡 모든 변수가 float임이 상단에서 100% 검증되었으므로 포맷팅 에러가 절대 나지 않습니다.
     info_text = (
         f"### 🪐 행성 특성 정보\n"
         f"* **이름:** `{p_data['pl_name']}`\n"
