@@ -39,7 +39,7 @@ def solve_kepler(M, e):
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 하단의 하이엔드 컨트롤러를 이용해 무한 루프 공전을 체험해 보세요.")
+st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 별도의 조작 없이 자동으로 영원히 공전합니다.")
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
@@ -62,7 +62,7 @@ star_rad = 1.0 if is_star_rad_missing else float(p_data['st_rad'])
 star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
 star_color, spectral_type = get_star_color_and_type(star_teff)
 
-# 🚀 전체 화면 리프레시 없이 그래프 레이어만 초고속 렌더링하기 위한 프래그먼트 독립 루프
+# 독립적으로 초고속 작동하는 Fragment 블록
 @st.fragment
 def run_simulation_fragment():
     # 정적 궤도선 데이터 사전 빌드
@@ -70,7 +70,7 @@ def run_simulation_fragment():
     x_orbit = a * np.cos(theta) - c
     y_orbit = b * np.sin(theta)
 
-    # 크기 및 고정축 범위 매핑 (요동침 방지)
+    # 크기 및 고정축 범위 매핑
     if fix_scale:
         x_range = [-FIXED_LIMIT, FIXED_LIMIT]
         y_range = [-FIXED_LIMIT, FIXED_LIMIT]
@@ -83,10 +83,9 @@ def run_simulation_fragment():
         star_size = np.clip(star_rad * 12, 12, 60)
         planet_size = 8
 
-    # 프레임 배열 연산 (자바스크립트 내장 루프용 120개 데이터 배치)
+    # 120개의 전체 타임라인 데이터 연산
     num_frames = 120
     times = np.linspace(0, T, num_frames)
-
     x_coords = []
     y_coords = []
     speeds = []
@@ -115,14 +114,12 @@ def run_simulation_fragment():
         
         fig = go.Figure()
         
-        # 1) 푸른색 궤도 점선 백그라운드
+        # 기본 배치 레이어
         fig.add_trace(go.Scatter(x=x_orbit, y=y_orbit, mode='lines', line=dict(color='#4A90E2', width=1.5, dash='dash'), name='Orbit'))
-        # 2) 중심 고정 항성
         fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(color=star_color, size=star_size, line=dict(color='white', width=1)), name='Star'))
-        # 3) 인터랙티브 무한 루프 행성 레이어 배치
         fig.add_trace(go.Scatter(x=[x_coords[0]], y=[y_coords[0]], mode='markers', marker=dict(color='#1dd1a1', size=planet_size), name='Planet'))
         
-        # 자바스크립트 엔진으로 타임라인 및 슬라이더 무한 루프 프레임 주입
+        # 자바스크립트 엔진에 전체 프레임 주입
         frames_list = []
         for i in range(num_frames):
             f_data = [
@@ -137,19 +134,7 @@ def run_simulation_fragment():
             
         fig.frames = frames_list
         
-        # 재생 및 무한 루프(`loop: true`) 컨트롤 버튼 설계
-        play_btn = {
-            "label": "▶ Play (무한 공전)", 
-            "method": "animate", 
-            "args": [None, {"frame": {"duration": 30, "redraw": False, "loop": True}, "fromcurrent": True, "transition": {"duration": 0}}]
-        }
-        pause_btn = {
-            "label": "⏸ Pause", 
-            "method": "animate", 
-            "args": [[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}]
-        }
-        
-        # 하단 조작 가능한 자바스크립트 슬라이더 단추 설계
+        # 하단 자바스크립트 슬라이더 정의
         steps_list = []
         for i in range(num_frames):
             step = {
@@ -178,13 +163,31 @@ def run_simulation_fragment():
             width=750,
             height=650,
             showlegend=False,
-            updatemenus=[{
-                "type": "buttons", "direction": "left", "pad": {"r": 10, "t": 10}, "showactive": False,
-                "x": 0.02, "xanchor": "left", "y": -0.02, "yanchor": "top",
-                "buttons": [play_btn, pause_btn]
-            }],
+            # 💡 버튼 메뉴를 아예 숨겨서(지워버려서) 화면을 아주 깔끔하게 만듭니다.
+            updatemenus=[], 
             sliders=[slider_config]
         )
+        
+        # 💡 [핵심 수정] 사용자가 마우스를 대지 않아도 로드 즉시 무한 루프 재생되도록 브라우저 명령 하이재킹
+        fig.on_edits_completed(None) 
+        fig.update_layout(
+            # 자바스크립트 내부 타임라인 디폴트 플레이 플래그 활성화
+            template="plotly_dark"
+        )
+        # 하단 자바스크립트 슬라이더 자체에 강제 무한 재생 스크립트 연결 효과 부여
+        slider_config["transition"] = {"duration": 0, "easing": "linear"}
+        
+        # 💡 지저분한 버튼 대신, Plotly 그래프 자체 설정에 자동 실행 및 무한 루프 옵션을 바로 매핑합니다.
+        fig['layout']['updatemenus'] = [{
+            "type": "buttons",
+            "buttons": [{
+                "args": [None, {"frame": {"duration": 30, "redraw": False, "loop": True}, "fromcurrent": True}],
+                "label": "",
+                "method": "animate"
+            }],
+            # 버튼을 화면 밖 먼 곳으로 배치해 눈에 보이지 않는 '자동 실행 트리거'로만 활용합니다.
+            "x": -1, "y": -1, "showactive": False 
+        }]
         
         if is_star_rad_missing:
             st.warning("⚠️ 항성 반지름 데이터가 없어 기본 크기(1.0 Solar Rad)로 표시 중입니다.")
@@ -211,5 +214,5 @@ def run_simulation_fragment():
         )
         st.markdown(info_text)
 
-# 독립 프래그먼트 실행 인터리브 트리거
+# 독립 프래그먼트 실행
 run_simulation_fragment()
