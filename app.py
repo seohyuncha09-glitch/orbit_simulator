@@ -26,35 +26,28 @@ st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 
 
 # ⚙️ 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
-selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
 
-# 💡 [순정 툴팁 완벽 구현] 
-# 스트림릿의 빈 텍스트 영역에 help를 주는 방식을 결합하여, 
-# 평소엔 숨겨져 있다가 마우스를 올리면 정식 회색 물음표 툴팁이 나오도록 디자인했습니다.
-
-# ⚙️ 사이드바 제어 패널
-st.sidebar.header("⚙️ 제어 패널")
-
-# 💡 selectbox에도 고유한 key="planet_selector"를 추가하여 중복 에러를 원천 차단합니다.
+# 중복 ID 방지를 위해 selectbox에 고유 key 부여
 selected_planet = st.sidebar.selectbox(
     "🪐 탐색할 행성 선택", 
     all_planet_names, 
-    key="planet_selector"
+    key="sidebar_planet_selector"
 )
 
-# 지구 궤도 비교선 및 순정 툴팁
+# 💡 순정 회색 물음표(help) 구현을 위해 빈 공간에 help 인자 배정 및 고유 key 추가
 col_earth_chk, col_earth_help = st.sidebar.columns([8, 2])
 with col_earth_chk:
     show_earth_orbit = st.checkbox("🌍 지구 궤도 비교선 표시", value=False)
 with col_earth_help:
-    st.write("", help="우리 태양계 지구의 공전 궤도(반지름 1.0 AU, 이심률 0.0167)를 회색 점선으로 겹쳐서 보여줍니다. 외계행성 궤도 크기와 직관적인 비교가 가능합니다.", key="earth_help_tip")
+    st.write("", help="우리 태양계 지구의 공전 궤도(반지름 1.0 AU, 이심률 0.0167)를 회색 점선으로 겹쳐서 보여줍니다. 외계행성 궤도 크기와 직관적인 비교가 가능합니다.", key="tip_earth_orbit")
 
-# 골디락스 존 및 순정 툴팁
 col_hz_chk, col_hz_help = st.sidebar.columns([8, 2])
 with col_hz_chk:
     show_habitable_zone = st.checkbox("🟢 골디락스 존 표시", value=False)
 with col_hz_help:
-    st.write("", help="생명체 거주 가능 구역(Habitable Zone)입니다. 중심 항성의 질량을 기반으로 계산되었으며, 행성 표면에 액체 상태의 물이 존재할 수 있는 거리 범위를 초록색 띠로 나타냅니다.", key="hz_help_tip")
+    st.write("", help="생명체 거주 가능 구역(Habitable Zone)입니다. 중심 항성의 질량을 기반으로 계산되었으며, 행성 표면에 액체 상태의 물이 존재할 수 있는 거리 범위를 초록색 띠로 나타냅니다.", key="tip_habitable_zone")
+
+
 # 행성 데이터 추출
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
 a = float(p_data['pl_orbsmax'])
