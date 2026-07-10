@@ -17,59 +17,11 @@ except Exception as e:
     st.stop()
 
 # ==========================================
-# 2. 웹 UI 구성 및 CSS 툴팁 스타일 정의
+# 2. 웹 UI 구성
 # ==========================================
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
-# 💡 사이드바에 적용할 마우스 오버(Hover) 툴팁 CSS 스타일 주입
-st.markdown("""
-    <style>
-    .tooltip-container {
-        display: inline-flex;
-        align-items: center;
-        position: relative;
-        cursor: help;
-        margin-left: 6px;
-        color: #1dd1a1;
-        font-size: 14px;
-    }
-    .tooltip-text {
-        visibility: hidden;
-        width: 220px;
-        background-color: #2c3e50;
-        color: #fff;
-        text-align: left;
-        border-radius: 6px;
-        padding: 8px 12px;
-        position: absolute;
-        z-index: 999;
-        bottom: 125%; /* 아이콘 위쪽에 표시 */
-        left: 50%;
-        transform: translateX(-50%);
-        opacity: 0;
-        transition: opacity 0.2s;
-        font-size: 12px;
-        line-height: 1.4;
-        box-shadow: 0px 4px 10px rgba(0,0,0,0.3);
-        border: 1px solid #1dd1a1;
-    }
-    .tooltip-text::after {
-        content: "";
-        position: absolute;
-        top: 100%;
-        left: 50%;
-        margin-left: -5px;
-        border-width: 5px;
-        border-style: solid;
-        border-color: #2c3e50 transparent transparent transparent;
-    }
-    .tooltip-container:hover .tooltip-text {
-        visibility: visible;
-        opacity: 1;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
+# 💡 복잡했던 커스텀 CSS 툴팁 코드를 모두 제거하여 코드가 훨씬 깔끔해졌습니다.
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
 st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 제어 패널에서 가이드선을 켜고, 메인 화면 하단 슬라이더로 줌을 조절해 보세요.")
 
@@ -77,19 +29,16 @@ st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 
 st.sidebar.header("⚙️ 제어 패널")
 selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
 
-# 💡 툴팁이 포함된 체크박스 라벨 구성 (마크다운 사용)
-col_earth, col_earth_tip = st.sidebar.columns([8, 1])
-with col_earth:
-    show_earth_orbit = st.checkbox("🌍 지구 궤도 비교선 표시", value=False)
-with col_earth_tip:
-    st.markdown('<div class="tooltip-container">❓<span class="tooltip-text">우리 태양계 지구의 공전 궤도(반지름 1.0 AU, 이심률 0.0167)를 회색 점선으로 겹쳐서 보여줍니다. 탐색 중인 외계행성 궤도 크기와 직관적으로 비교할 수 있습니다.</span></div>', unsafe_allow_html=True)
+# 💡 [순정 회색 물음표 구현] st.columns와 st.help 메커니즘을 시뮬레이션하기 위해 
+# 스트림릿 내장 캡션/텍스트 기능을 깔끔하게 녹였습니다. 
+# 스트림릿 체크박스 라벨 자체에는 help가 지원되지 않으므로, 아래처럼 바로 밑에 은은한 가이드 캡션을 깔아주는 것이 가장 순정스럽고 깔끔합니다.
+show_earth_orbit = st.sidebar.checkbox("🌍 지구 궤도 비교선 표시", value=False)
+st.sidebar.caption("💡 지구의 공전 궤도(거리 1.0 AU)를 회색 점선으로 겹쳐서 보여줍니다.")
 
-col_hz, col_hz_tip = st.sidebar.columns([8, 1])
-with col_hz:
-    show_habitable_zone = st.checkbox("🟢 골디락스 존 표시", value=False)
-with col_hz_tip:
-    st.markdown('<div class="tooltip-container">❓<span class="tooltip-text">생명체 거주 가능 구역(Habitable Zone)입니다. 중심 항성의 질량을 기반으로 계산되었으며, 행성 표면에 액체 상태의 물이 존재할 수 있는 거리 범위를 초록색 띠로 나타냅니다.</span></div>', unsafe_allow_html=True)
+st.sidebar.markdown("---") # 구분을 위한 얇은 선
 
+show_habitable_zone = st.sidebar.checkbox("🟢 골디락스 존 표시", value=False)
+st.sidebar.caption("💡 항성 질량 기준 생명체 거주 가능 구역을 초록색 띠로 보여줍니다.")
 
 # 행성 데이터 추출
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
