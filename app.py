@@ -81,18 +81,29 @@ for t in times:
     y_coords.append(y_val)
     
     r_val = np.sqrt((x_val + c)**2 + y_val**2)
-    if r_val > 0 and (2 / r_val - 1 / a) > 0:
+    
+    # 활력방정식 안전 연산 오차 방지 강화
+    if r_val > 0.001 and (2 / r_val - 1 / a) > 0:
         v_au_day = np.sqrt(mu * (2 / r_val - 1 / a))
     else:
         v_au_day = 0.0
-    speeds.append(v_au_day * 149597870.7 / 86400)
+        
+    v_kms = v_au_day * 149597870.7 / 86400
+    # 계산값에 에러(NaN)가 발생하면 0.0으로 대체
+    if np.isnan(v_kms) or np.isinf(v_kms):
+        v_kms = 0.0
+    speeds.append(v_kms)
+
+# 만약 데이터 오류로 speeds 리스트가 비어있을 때를 대비한 2차 안전장치
+if not speeds:
+    speeds = [0.0] * num_frames
 
 # 정적 궤도선 데이터
 theta = np.linspace(0, 2 * np.pi, 200)
 x_orbit = a * np.cos(theta) - c
 y_orbit = b * np.sin(theta)
 
-# 💡 [해결 1] 너무 크게 나오던 항성의 크기 스케일을 시각적으로 안전하게 축소
+# 크기 및 축 범위 매핑
 if fix_scale:
     x_range = [-FIXED_LIMIT, FIXED_LIMIT]
     y_range = [-FIXED_LIMIT, FIXED_LIMIT]
@@ -136,7 +147,7 @@ with col1:
         
     fig.frames = frames_list
     
-    # 💡 [해결 2] "loop": True 설정을 추가하여 한 바퀴 돌고 나면 멈추지 않고 계속 공전하도록 수정
+    # 버튼 컨트롤러 설정
     play_button = {
         "label": "▶ Play", 
         "method": "animate", 
@@ -175,12 +186,14 @@ with col1:
         "steps": steps_list
     }
     
+    # 💡 initial_speed 변수를 따로 파싱하여 0번 인덱스 에러 방지 처리
+    initial_speed = speeds[0] if len(speeds) > 0 else 0.0
+    
     fig.update_layout(
-        title=dict(text=f"<b>Time: 0.0 / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {speeds[0]:.2f} km/s</span></b>", x=0.05, y=0.95, font=dict(color='white', size=14)),
+        title=dict(text=f"<b>Time: 0.0 / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {initial_speed:.2f} km/s</span></b>", x=0.05, y=0.95, font=dict(color='white', size=14)),
         template="plotly_dark",
         paper_bgcolor="#111111",
         plot_bgcolor="#111111",
-        # 💡 [해결 3] 무의미하게 공간을 가르던 하얀색 가로/세로 기준선(showzeroline)을 완전히 제거
         xaxis=dict(range=x_range, title="X Distance (AU)", gridcolor="rgba(128,128,128,0.15)", scaleanchor="y", scaleratio=1, showzeroline=False),
         yaxis=dict(range=y_range, title="Y Distance (AU)", gridcolor="rgba(128,128,128,0.15)", showzeroline=False),
         width=700,
