@@ -19,17 +19,17 @@ except Exception as e:
 # ==========================================
 # 2. 웹 UI 구성
 # ==========================================
-st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
+st.set_page_config(page_title="행성 공전 궤도 시뮬레이터", layout="wide")
 
-st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 제어 패널에서 가이드선을 켜고, 메인 화면 하단 슬라이더로 줌을 조절해 보세요.")
+st.title("행성 공전 궤도 시뮬레이터")
+st.markdown("NASA Exoplanet Archive를 기반으로 제작되었습니다.")
 
 # ⚙️ 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
 selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
 
-show_earth_orbit = st.sidebar.checkbox("🌍 지구 궤도 비교선 표시 (1.0 AU)", value=False)
-show_habitable_zone = st.sidebar.checkbox("🟢 골디락스 존 표시 (생명체 거주 구역)", value=False)
+show_earth_orbit = st.sidebar.checkbox("🌍 지구 궤도 비교선 표시", value=False)
+show_habitable_zone = st.sidebar.checkbox("🟢 골디락스 존 표시", value=False)
 
 # 행성 데이터 추출
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
@@ -55,17 +55,17 @@ def get_star_info(teff):
     if pd.isna(teff): 
         return '#FF9F43', '정보 없음'
     if teff >= 10000: 
-        return '#9bb0ff', 'O형 또는 B형 (청색 청백색 고온성)'
+        return '#9bb0ff', 'O형 또는 B형 (청백색)'
     elif teff >= 7500: 
         return '#aabfff', 'A형 (백색)'
     elif teff >= 6000: 
         return '#f8f7ff', 'F형 (황백색)'
     elif teff >= 5200: 
-        return '#fff4ea', 'G형 (황색, 태양 유사형)'
+        return '#fff4ea', 'G형 (황색)'
     elif teff >= 3700: 
-        return '#ffd2a1', 'K형 (오렌지색)'
+        return '#ffd2a1', 'K형 (주황색)'
     else: 
-        return '#ff8585', 'M형 (적색 왜성 등 저온성)'
+        return '#ff8585', 'M형 (적색)'
 
 star_color, star_spectral_type = get_star_info(star_teff)
 
@@ -356,7 +356,7 @@ with col1:
     st.components.v1.html(html_code, height=660)
 
 with col2:
-    st.subheader("📊 데이터 대시보드")
+    st.subheader("📊 데이터")
     def check_val(val, unit=""): return f"{val:.3f} {unit}" if not pd.isna(val) else "정보 없음"
     star_rad_display = "정보 없음 (기본값)" if is_star_rad_missing else f"{star_rad:.3f} Solar Rad"
     star_teff_display = f"{star_teff:.1f} K" if not pd.isna(star_teff) else "정보 없음"
@@ -366,8 +366,7 @@ with col2:
         f"* **이름:** `{p_data['pl_name']}`\n"
         f"* **공전 주기:** `{T:.1f} 일` \n"
         f"* **궤도 장반경 (거리):** `{a:.3f} AU` \n"
-        f"* **궤도 이심률 (타원형 정도):** `{e:.3f}` \n"
-        f"* **행성 반지름:** `정보 없음 (화면 고정)` \n\n"
+        f"* **궤도 이심률 (타원형 정도):** `{e:.3f}` \n\n"
         f"### ☀️ 중심 항성(별) 정보\n"
         f"* **항성 반지름:** `{star_rad_display}` \n"
         f"* **항성 질량:** `{check_val(p_data['st_mass'] if 'st_mass' in p_data else np.nan, 'Solar Mass')}`\n"
