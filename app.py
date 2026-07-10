@@ -85,6 +85,7 @@ for t in times:
         v_au_day = np.sqrt(mu * (2 / r_val - 1 / a))
     else:
         v_au_day = 0.0
+        
     speeds.append(v_au_day * 149597870.7 / 86400)
 
 # 정적 궤도선 데이터
@@ -92,20 +93,16 @@ theta = np.linspace(0, 2 * np.pi, 200)
 x_orbit = a * np.cos(theta) - c
 y_orbit = b * np.sin(theta)
 
-# ------------------------------------------
-# 🛠️ [수정 부분] 항성이 너무 크게 나오는 현상 해결
-# ------------------------------------------
+# 크기 및 축 범위 매핑
 if fix_scale:
     x_range = [-FIXED_LIMIT, FIXED_LIMIT]
     y_range = [-FIXED_LIMIT, FIXED_LIMIT]
-    # 축 범위가 넓을 때 항성 크기 축소 (최대 40픽셀 제한)
     star_size = np.clip(star_rad * 6, 6, 40)
     planet_size = 5
 else:
     limit = a * 1.3
     x_range = [-limit - c, limit - c]
     y_range = [-limit, limit]
-    # 💡 자동 확대 줌 모드에서 기존 35배 -> 12배로 낮추고 최댓값을 60픽셀로 대폭 줄임
     star_size = np.clip(star_rad * 12, 12, 60)
     planet_size = 8
 
@@ -124,7 +121,7 @@ with col1:
     fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(color=star_color, size=star_size, line=dict(color='white', width=1)), name='Star'))
     fig.add_trace(go.Scatter(x=[x_coords[0]], y=[y_coords[0]], mode='markers', marker=dict(color='#1dd1a1', size=planet_size), name='Planet'))
     
-    # 괄호 구조 최적화 루프
+    # 프레임 리스트 생성
     frames_list = []
     for i in range(num_frames):
         frame_data = [
@@ -140,9 +137,25 @@ with col1:
         
     fig.frames = frames_list
     
-    # 컨트롤 UI 설정
-    play_button = {"label": "▶ Play", "method": "animate", "args": [None, {"frame": {"duration": 25, "redraw": False}, "fromcurrent": True, "transition": {"duration": 0}}]}
-    pause_button = {"label": "⏸ Pause", "method": "animate", "args": [[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}]}
+    # 💡 [수정 핵심] "frame" 속성에 {"loop": True} 옵션을 추가하여 무한 궤도 회전 구현
+    play_button = {
+        "label": "▶ Play", 
+        "method": "animate", 
+        "args": [None, {
+            "frame": {"duration": 25, "redraw": False, "loop": True}, # 여기서 무한 루프 활성화!
+            "fromcurrent": True, 
+            "transition": {"duration": 0}
+        }]
+    }
+    pause_button = {
+        "label": "⏸ Pause", 
+        "method": "animate", 
+        "args": [[None], {
+            "frame": {"duration": 0, "redraw": False}, 
+            "mode": "immediate", 
+            "transition": {"duration": 0}
+        }]
+    }
     
     menu_dict = {
         "type": "buttons",
