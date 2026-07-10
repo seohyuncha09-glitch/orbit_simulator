@@ -22,7 +22,7 @@ except Exception as e:
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 브라우저 하드웨어 가속을 통해 멈춤과 요동침 없이 영원히 공전합니다.")
+st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 상단 레이블과 재생/멈춤 제어가 포함된 최종 웹 가속 버전입니다.")
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
@@ -36,6 +36,7 @@ T = float(p_data['pl_orbper'])
 
 b = a * np.sqrt(1 - e**2)
 c = a * e
+mu = (4 * np.pi**2 * (a**3)) / (T**2) if T > 0 else 1.0
 
 # 항성 정보 물리 매핑
 is_star_rad_missing = 'st_rad' not in p_data or pd.isna(p_data['st_rad'])
@@ -60,50 +61,85 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
     
-    # 💡 브라우저 내장 자바스크립트로 초고속 무한 루프를 돌리는 HTML Injection 코드
+    # 💡 브라우저 내장 자바스크립트로 그리는 자막 + 재생 제어 컴포넌트 HTML
     html_code = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <style>
-            body {{ background-color: #111111; margin: 0; overflow: hidden; font-family: sans-serif; }}
-            canvas {{ background: #111111; display: block; margin: 0 auto; }}
+            body {{ background-color: #111111; margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; }}
+            #container {{ position: relative; width: 700px; height: 580px; margin: 0 auto; }}
+            canvas {{ background: #111111; display: block; }}
+            /* UI 텍스트 오버레이 디자인 */
+            #infoOverlay {{ position: absolute; top: 15px; left: 20px; font-size: 15px; font-weight: bold; line-height: 1.5; pointer-events: none; }}
+            #speedText {{ color: #1dd1a1; }}
+            /* 제어 버튼 디자인 */
+            #controlBtn {{ 
+                position: absolute; bottom: 15px; left: 20px; 
+                background: #111111; border: 1px solid #555555; color: white; 
+                padding: 6px 12px; font-size: 13px; font-weight: bold; border-radius: 4px; cursor: pointer; 
+                transition: all 0.2s;
+            }}
+            #controlBtn:hover {{ background: #222222; border-color: #1dd1a1; color: #1dd1a1; }}
         </style>
     </head>
     <body>
-        <canvas id="orbitCanvas" width="700" height="550"></canvas>
+        <div id="container">
+            <div id="infoOverlay">
+                <div id="timeText">Time: 0.0 / {T:.1f} days</div>
+                <div id="speedText">Speed: 0.00 km/s</div>
+            </div>
+            <button id="controlBtn">⏸ Pause</button>
+            <canvas id="orbitCanvas" width="700" height="580"></canvas>
+        </div>
+
         <script>
             const canvas = document.getElementById('orbitCanvas');
             const ctx = canvas.getContext('2d');
+            const timeLabel = document.getElementById('timeText');
+            const speedLabel = document.getElementById('speedText');
+            const controlBtn = document.getElementById('controlBtn');
             
-            // 파이썬에서 넘겨받은 천체 물리 상수 변수화
+            // 파이썬 상수를 자바스크립트로 바인딩
             const a = {a};
             const e = {e};
             const b = {b};
             const c = {c};
+            const T = {T};
+            const mu = {mu};
             const starColor = "{star_color}";
             
-            // 화면 꽉 차게 스케일 자동 정적 매핑 (출렁거림 원천 차단)
+            // 자동 축 고정 계산 스케일
             const limit = a * (1 + e) * 1.3;
             const scale = (canvas.width / 2) / limit;
             
             const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
+            const centerY = canvas.height / 2 + 20; // 텍스트 공간 확보를 위해 살짝 아래로 중심 이동
             
-            let angle = 0; // 공전 타이머 변수
+            let currentDays = 0; // 경과 일수 계산 트리거
+            let isPlaying = true; // 재생 제어 플래그
             
+            // 재생 / 일시정지 토글 함수
+            controlBtn.addEventListener('click', () => {{
+                isPlaying = !isPlaying;
+                controlBtn.textContent = isPlaying ? "⏸ Pause" : "▶ Play";
+                if (isPlaying) draw(); // 다시 재생 시 애니메이션 루프 재가동
+            }});
+
             function draw() {{
+                if (!isPlaying) return; // 일시정지 상태면 그리기 중단
+
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
-                // 1. 배경 그리드망 선배치 (옵션)
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+                // 1. 모눈망 배경
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
                 ctx.lineWidth = 1;
                 for(let i=0; i<canvas.width; i+=50) {{
                     ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
                     ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
                 }}
                 
-                // 2. 궤도선 (푸른색 점선 고정)
+                // 2. 푸른색 공전 궤도선
                 ctx.save();
                 ctx.translate(centerX - (c * scale), centerY);
                 ctx.strokeStyle = '#4A90E2';
@@ -114,24 +150,26 @@ with col1:
                 ctx.stroke();
                 ctx.restore();
                 
-                // 3. 중심 항성 (태양) 배치
+                // 3. 중심 항성 (태양)
                 ctx.beginPath();
                 ctx.arc(centerX, centerY, Math.max(8, Math.min({star_rad} * 12, 35)), 0, 2 * Math.PI);
                 ctx.fillStyle = starColor;
                 ctx.shadowColor = starColor;
                 ctx.shadowBlur = 15;
                 ctx.fill();
-                ctx.shadowBlur = 0; // 그림자 초기화
+                ctx.shadowBlur = 0;
                 ctx.strokeStyle = 'white';
                 ctx.lineWidth = 1;
                 ctx.stroke();
                 
-                // 4. 케플러 타원 이심률 각도 근사 계산 (부드러운 주행감 유도)
-                let E = angle + e * Math.sin(angle) + (e*e/2) * Math.sin(2*angle);
+                // 4. 경과 시간을 이용한 평균 근점 이각(M) 구하기 및 케플러 방정식 풀이
+                let M_val = (2 * Math.PI / T) * currentDays;
+                let E = M_val + e * Math.sin(M_val) + (e*e/2) * Math.sin(2*M_val); // 근사식 이용
+                
                 let planetX = centerX - (c * scale) + (a * scale * Math.cos(E));
                 let planetY = centerY + (b * scale * Math.sin(E));
                 
-                // 5. 초록색 공전 행성 그리기
+                // 5. 초록색 외계행성
                 ctx.beginPath();
                 ctx.arc(planetX, planetY, 7, 0, 2 * Math.PI);
                 ctx.fillStyle = '#1dd1a1';
@@ -139,23 +177,33 @@ with col1:
                 ctx.strokeStyle = '#ffffff';
                 ctx.stroke();
                 
-                // 💡 [무한 루프의 핵심] 각도를 전진시키고, 2파이(360도)를 넘으면 자동으로 0부터 무한 반복
-                angle += 0.025; 
-                if (angle >= 2 * Math.PI) angle = 0;
+                // 6. 실시간 궤도 속도 물리 연산 및 레이블 글씨 갱신
+                let r_p = Math.sqrt(Math.pow((planetX - centerX)/scale + c, 2) + Math.pow((planetY - centerY)/scale, 2));
+                let v_kms = 0;
+                if (r_p > 0 && (2/r_p - 1/a) > 0) {{
+                    let v_au = Math.sqrt(mu * (2/r_p - 1/a));
+                    v_kms = v_au * 149597870.7 / 86400;
+                }}
                 
-                // 브라우저 자체 주사율에 맞춰 부드럽게 무한 루프 실행 (60FPS 보장)
+                timeLabel.innerHTML = `<b>Time: ${{currentDays.toFixed(1)}} / ${{T.toFixed(1)}} days</b>`;
+                speedLabel.innerHTML = `<b>Speed: ${{v_kms.toFixed(2)}} km/s</b>`;
+                
+                // 7. 시간 간격 증가 및 무한 루프 처리
+                let dt = T / 250; // 속도가 너무 빠르면 분모 숫자를 키우세요
+                currentDays += dt;
+                if (currentDays >= T) currentDays = 0; // 한 바퀴 끝나면 0초로 자동 리셋
+                
                 requestAnimationFrame(draw);
             }}
             
-            // 시뮬레이션 즉시 스타트
+            // 즉시 구동
             draw();
         </script>
     </body>
     </html>
     """
     
-    # 스트림릿 내장 html 컴포넌트로 주입 (깜빡임, 리런 멈춤 현상 100% 없음)
-    st.components.v1.html(html_code, height=560)
+    st.components.v1.html(html_code, height=590)
 
 with col2:
     st.subheader("📊 데이터 대시보드")
