@@ -1,5 +1,7 @@
 import streamlit as st
 import numpy as np
+import streamlit as st
+import numpy as np
 import pandas as pd
 
 # ==========================================
@@ -19,17 +21,28 @@ except Exception as e:
 # ==========================================
 # 2. 웹 UI 구성
 # ==========================================
-st.set_page_config(page_title="행성 공전 궤도 시뮬레이터", layout="wide")
+st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
-st.title("행성 공전 궤도 시뮬레이터")
-st.markdown("NASA Exoplanet Archive를 기반으로 제작되었습니다.")
+st.title("🌌 외계행성 공전 궤도 시뮬레이터")
+st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 제어 패널에서 가이드선을 켜고, 메인 화면 하단 슬라이더로 줌을 조절해 보세요.")
 
 # ⚙️ 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
-selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
 
+selected_planet = st.sidebar.selectbox(
+    "🪐 탐색할 행성 선택", 
+    all_planet_names, 
+    key="sidebar_planet_selector"
+)
+
+st.sidebar.markdown("---")
+
+# 가이드선 체크박스들
 show_earth_orbit = st.sidebar.checkbox("🌍 지구 궤도 비교선 표시", value=False)
 show_habitable_zone = st.sidebar.checkbox("🟢 골디락스 존 표시", value=False)
+
+# ✨ [새로 추가된 기능] 실제 항성 비율 보기 체크박스
+real_star_scale = st.sidebar.checkbox("🪐 실제 항성 비율로 보기", value=False)
 
 # 행성 데이터 추출
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
@@ -50,22 +63,21 @@ star_mass = float(p_data['st_mass']) if 'st_mass' in p_data and not pd.isna(p_da
 hz_inner = 0.75 * np.sqrt(star_mass)
 hz_outer = 1.77 * np.sqrt(star_mass)
 
-# 💡 표면온도에 따른 색상 및 분광형 계산 함수
 def get_star_info(teff):
     if pd.isna(teff): 
         return '#FF9F43', '정보 없음'
     if teff >= 10000: 
-        return '#9bb0ff', 'O형 또는 B형 (청백색)'
+        return '#9bb0ff', 'O형 또는 B형 (청색 청백색 고온성)'
     elif teff >= 7500: 
         return '#aabfff', 'A형 (백색)'
     elif teff >= 6000: 
         return '#f8f7ff', 'F형 (황백색)'
     elif teff >= 5200: 
-        return '#fff4ea', 'G형 (황색)'
+        return '#fff4ea', 'G형 (황색, 태양 유사형)'
     elif teff >= 3700: 
-        return '#ffd2a1', 'K형 (주황색)'
+        return '#ffd2a1', 'K형 (오렌지색)'
     else: 
-        return '#ff8585', 'M형 (적색)'
+        return '#ff8585', 'M형 (적색 왜성 등 저온성)'
 
 star_color, star_spectral_type = get_star_info(star_teff)
 
@@ -114,7 +126,7 @@ with col1:
                 <div id="timeText">Time: 0.0 / {T:.1f} days</div>
                 <div id="speedText">Speed: 0.00 km/s</div>
             </div>
-            <canvas id="orbitCanvas" width="700" height="530"></canvas>
+            <canvas id="orbitCanvas" width="700" height="520"></canvas>
         </div>
 
         <div id="mainControls">
@@ -157,6 +169,7 @@ with col1:
             
             const showEarthOrbit = {str(show_earth_orbit).lower()};
             const showHabitableZone = {str(show_habitable_zone).lower()};
+            const realStarScale = {str(real_star_scale).lower()};
             
             const hzInner = {hz_inner};
             const hzOuter = {hz_outer};
@@ -306,22 +319,30 @@ with col1:
                 ctx.stroke();
                 ctx.restore();
                 
+                // ⚙️ 항성 크기 드로잉 알고리즘 (체크박스 상태에 따라 분기)
                 ctx.beginPath();
-let calculatedStarRad = {star_rad} * 10 * currentZoom; 
-
-// 2. 최대 제한선 자체를 줌에 비례하게 가변적으로 설정 (예: 기본 40px ~ 최대 확대 시 120px)
-let maxLimit = 40 + (currentZoom * 25); 
-
-// 3. 최소 5px 보장, 계산된 크기 적용, 단 가변 한계선(maxLimit)을 넘지 않도록 제한
-let finalStarRad = Math.max(5, Math.min(calculatedStarRad, maxLimit));
-ctx.arc(centerX, centerY, finalStarRad, 0, 2 * Math.PI);
+                let finalStarRad = 6;
+                
+                if (realStarScale) {{
+                    // 1. 현실 고증 버전 (광활한 우주 공간 대비 아주 작게 표현)
+                    let calculatedStarRad = {star_rad} * 1.5 * currentZoom; 
+                    let maxLimit = 15; 
+                    finalStarRad = Math.max(2, Math.min(calculatedStarRad, maxLimit));
+                }} else {{
+                    // 2. 가독성 우선 버전 (줌에 맞춰 기분 좋게 가변적으로 커지는 방식)
+                    let calculatedStarRad = {star_rad} * 10 * currentZoom; 
+                    let maxLimit = 40 + (currentZoom * 25); 
+                    finalStarRad = Math.max(5, Math.min(calculatedStarRad, maxLimit));
+                }}
+                
+                ctx.arc(centerX, centerY, finalStarRad, 0, 2 * Math.PI);
                 ctx.fillStyle = starColor;
                 ctx.shadowColor = starColor;
-                ctx.shadowBlur = 12;
+                ctx.shadowBlur = realStarScale ? 4 : 12; // 현실 고증일 땐 빛 번짐도 앙증맞게 축소
                 ctx.fill();
                 ctx.shadowBlur = 0;
                 ctx.strokeStyle = 'white';
-                ctx.lineWidth = 1;
+                ctx.lineWidth = realStarScale ? 0.5 : 1;
                 ctx.stroke();
                 
                 let M_val = (2 * Math.PI / T) * currentDays;
@@ -363,21 +384,22 @@ ctx.arc(centerX, centerY, finalStarRad, 0, 2 * Math.PI);
     st.components.v1.html(html_code, height=660)
 
 with col2:
-    st.subheader("📊 데이터")
+    st.subheader("📊 데이터 대시보드")
     def check_val(val, unit=""): return f"{val:.3f} {unit}" if not pd.isna(val) else "정보 없음"
     star_rad_display = "정보 없음 (기본값)" if is_star_rad_missing else f"{star_rad:.3f} Solar Rad"
     star_teff_display = f"{star_teff:.1f} K" if not pd.isna(star_teff) else "정보 없음"
     
     info_text = (
-        f"### 🪐 행성 궤도 정보\n"
+        f"### 🪐 행성 특성 정보\n"
         f"* **이름:** `{p_data['pl_name']}`\n"
         f"* **공전 주기:** `{T:.1f} 일` \n"
-        f"* **궤도 장반경:** `{a:.3f} AU` \n"
-        f"* **궤도 이심률:** `{e:.3f}` \n\n"
-        f"### ☀️ 중심 항성 정보\n"
+        f"* **궤도 장반경 (거리):** `{a:.3f} AU` \n"
+        f"* **궤도 이심률 (타원형 정도):** `{e:.3f}` \n"
+        f"* **행성 반지름:** `정보 없음 (화면 고정)` \n\n"
+        f"### ☀️ 중심 항성(별) 정보\n"
         f"* **항성 반지름:** `{star_rad_display}` \n"
         f"* **항성 질량:** `{check_val(p_data['st_mass'] if 'st_mass' in p_data else np.nan, 'Solar Mass')}`\n"
         f"* **항성 표면온도:** `{star_teff_display}`\n"
-        f"* **항성 분광형:** ` {star_spectral_type} `" # 💡 분광형 정보 출력 코드 추가
+        f"* **항성 분광형:** ` {star_spectral_type} `"
     )
     st.markdown(info_text)
