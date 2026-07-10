@@ -307,7 +307,10 @@ with col1:
                 ctx.restore();
                 
                 ctx.beginPath();
-                ctx.arc(centerX, centerY, Math.max(6, Math.min({star_rad} * 10 * currentZoom, 60)), 0, 2 * Math.PI);
+let calculatedStarRad = {star_rad} * 12 * currentZoom; // 기본 크기 배율을 10에서 12로 살짝 키워 시각 효과 업!
+let finalStarRad = Math.max(5, calculatedStarRad);    // 너무 축소해서 별이 사라지는 것만 방지 (최소 5픽셀)
+
+ctx.arc(centerX, centerY, finalStarRad, 0, 2 * Math.PI);
                 ctx.fillStyle = starColor;
                 ctx.shadowColor = starColor;
                 ctx.shadowBlur = 12;
