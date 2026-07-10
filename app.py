@@ -34,7 +34,7 @@ def solve_kepler(M, e):
     return fsolve(func, M)[0]
 
 # ==========================================
-# 2. 웹 UI 구성 (Plotly 브라우저 렌더링 버전)
+# 2. 웹 UI 구성
 # ==========================================
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
@@ -63,7 +63,7 @@ star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
 star_color, spectral_type = get_star_color_and_type(star_teff)
 
 # ------------------------------------------
-# 💡 [핵심 알고리즘] 괄호 꼬임 에러 및 수식 완벽 해결 파트
+# 💡 모든 프레임 위치 및 속도 계산
 # ------------------------------------------
 num_frames = 120
 times = np.linspace(0, T, num_frames)
@@ -80,16 +80,11 @@ for t in times:
     x_coords.append(x_val)
     y_coords.append(y_val)
     
-    # 💡 괄호 꼬임 오타 방지를 위해 거리를 완전히 따로 분리하여 계산 (y_val의 제곱 버그도 수정)
     r_val = np.sqrt((x_val + c)**2 + y_val**2)
-    
-    # 활력방정식 안전 연산 (오차 방지 처리)
     if r_val > 0 and (2 / r_val - 1 / a) > 0:
         v_au_day = np.sqrt(mu * (2 / r_val - 1 / a))
     else:
         v_au_day = 0.0
-        
-    # km/s 단위로 최종 변환하여 리스트에 축적
     speeds.append(v_au_day * 149597870.7 / 86400)
 
 # 정적 궤도선 데이터
@@ -120,32 +115,58 @@ with col1:
     
     fig = go.Figure()
     
-    # 1) 푸른색 궤도 점선 추가
+    # 기본 레이어 추가
     fig.add_trace(go.Scatter(x=x_orbit, y=y_orbit, mode='lines', line=dict(color='#4A90E2', width=1.5, dash='dash'), name='Orbit'))
-    
-    # 2) 중심 항성 추가
     fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(color=star_color, size=star_size, line=dict(color='white', width=1)), name='Star'))
-    
-    # 3) 처음 0프레임 시점의 외계행성 배치
     fig.add_trace(go.Scatter(x=[x_coords[0]], y=[y_coords[0]], mode='markers', marker=dict(color='#1dd1a1', size=planet_size), name='Planet'))
     
-    # 💡 자바스크립트용 재생/일시정지 슬라이더 및 프레임 데이터 구조 설계
-    frames = [
-        go.Frame(
-            data=[
-                go.Scatter(x=x_orbit, y=y_orbit),  # 궤도선 유지
-                go.Scatter(x=[0], y=[0]),          # 중심별 유지
-                go.Scatter(x=[x_coords[i]], y=[y_coords[i]]) # 행성 위치만 실시간 스왑
-            ],
-            name=f"frame{i}",
-            layout=go.Layout(
-                title=dict(text=f"<b>Time: {times[i]:.1f} / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {speeds[i]:.2f} km/s</span></b>")
-            )
-        ) for i in range(num_frames)
-    )
-    fig.frames = frames
+    # 💡 [해결 책] 괄호 꼬임을 원천 차단하기 위해 복잡한 리스트 축약식을 일반 for 루프로 해체 빌드
+    frames_list = []
+    for i in range(num_frames):
+        frame_data = [
+            go.Scatter(x=x_orbit, y=y_orbit),
+            go.Scatter(x=[0], y=[0]),
+            go.Scatter(x=[x_coords[i]], y=[y_coords[i]])
+        ]
+        frame_layout = go.Layout(
+            title=dict(text=f"<b>Time: {times[i]:.1f} / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {speeds[i]:.2f} km/s</span></b>")
+        )
+        single_frame = go.Frame(data=frame_data, name=f"frame{i}", layout=frame_layout)
+        frames_list.append(single_frame)
+        
+    fig.frames = frames_list
     
-    # Plotly 전용 재생 컨트롤러 UI 디자인 구성
+    # 컨트롤 UI 설정
+    play_button = {"label": "▶ Play", "method": "animate", "args": [None, {"frame": {"duration": 25, "redraw": False}, "fromcurrent": True, "transition": {"duration": 0}}]}
+    pause_button = {"label": "⏸ Pause", "method": "animate", "args": [[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}]}
+    
+    menu_dict = {
+        "type": "buttons",
+        "direction": "left",
+        "pad": {"r": 10, "t": 10},
+        "showactive": False,
+        "x": 0.05, "xanchor": "left", "y": -0.1, "yanchor": "top",
+        "buttons": [play_button, pause_button]
+    }
+    
+    steps_list = []
+    for i in range(num_frames):
+        step = {
+            "args": [[f"frame{i}"], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}],
+            "label": f"{times[i]:.1f}",
+            "method": "animate"
+        }
+        steps_list.append(step)
+        
+    slider_dict = {
+        "active": 0,
+        "yanchor": "top", "xanchor": "left",
+        "currentvalue": {"font": {"size": 12, "color": "white"}, "prefix": "Day: ", "visible": True, "xanchor": "right"},
+        "transition": {"duration": 0},
+        "pad": {"b": 10, "t": 50}, "len": 0.9, "x": 0.05, "y": -0.15,
+        "steps": steps_list
+    }
+    
     fig.update_layout(
         title=dict(text=f"<b>Time: 0.0 / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {speeds[0]:.2f} km/s</span></b>", x=0.05, y=0.95, font=dict(color='white', size=14)),
         template="plotly_dark",
@@ -156,22 +177,8 @@ with col1:
         width=700,
         height=650,
         showlegend=False,
-        updatemenus=[{
-            "type": "buttons",
-            "buttons": [
-                {"label": "▶ Play", "method": "animate", "args": [None, {"frame": {"duration": 25, "redraw": False}, "fromcurrent": True, "transition": {"duration": 0}}]},
-                {"label": "⏸ Pause", "method": "animate", "args": [[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}]}
-            ],
-            "direction": "left", "pad": {"r": 10, "t": 10}, "showactive": False, "x": 0.05, "xanchor": "left", "y": -0.1, "yanchor": "top"
-        }],
-        sliders=[{
-            "active": 0,
-            "yanchor": "top", "xanchor": "left",
-            "currentvalue": {"font": {"size": 12, "color": "white"}, "prefix": "Day: ", "visible": True, "xanchor": "right"},
-            "transition": {"duration": 0},
-            "pad": {"b": 10, "t": 50}, "len": 0.9, "x": 0.05, "y": -0.15,
-            "steps": [{"args": [[f"frame{i}"], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}], "label": f"{times[i]:.1f}", "method": "animate"} for i in range(num_frames)]
-        }]
+        updatemenus=[menu_dict],
+        sliders=[slider_dict]
     )
     
     if is_star_rad_missing:
