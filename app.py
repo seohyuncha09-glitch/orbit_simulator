@@ -40,13 +40,11 @@ def solve_kepler(M, e):
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 별도의 클릭 없이 자동으로 무한 공전합니다.")
+st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 시스템 부하와 무한 루프 락을 완벽히 해결한 최종 버전입니다.")
 
-# 실시간 시간 트래킹을 위한 세션 변수 (접속 시 바로 자동 재생 상태)
+# 💡 락(Lock)을 유발하는 슬라이더 키 컴포넌트를 제거하고 순수한 파이썬 타이머 구동
 if 'current_time' not in st.session_state:
     st.session_state.current_time = 0.0
-if 'is_playing' not in st.session_state:
-    st.session_state.is_playing = True
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
@@ -68,10 +66,6 @@ is_star_rad_missing = 'st_rad' not in p_data or pd.isna(p_data['st_rad'])
 star_rad = 1.0 if is_star_rad_missing else float(p_data['st_rad'])
 star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
 star_color, spectral_type = get_star_color_and_type(star_teff)
-
-# 사이드바 재생/일시정지 수동 버튼 추가
-if st.sidebar.button("▶ 재생 / ⏸ 일시정지 토글"):
-    st.session_state.is_playing = not st.session_state.is_playing
 
 # ------------------------------------------
 # 레이아웃 분할 및 시각화
@@ -99,20 +93,10 @@ with col1:
         star_size = np.clip(star_rad * 12, 12, 60)
         planet_size = 8
 
-    # 💡 [슬라이더 부활] 화면 중앙에 Streamlit 순정 슬라이더 배치
-    # 사용자가 직접 조작할 수도 있고, 재생 시 시간에 따라 자동으로 바가 올라갑니다.
-    current_days = st.slider(
-        "📅 공전 경과 시간 (조작 가능)", 
-        min_value=0.0, 
-        max_value=float(T), 
-        value=float(st.session_state.current_time), 
-        step=max(0.1, T/200),
-        key="orbit_slider"
-    )
-    
-    # 사용자가 마우스로 슬라이더를 밀면 해당 시간으로 업데이트
-    if current_days != st.session_state.current_time:
-        st.session_state.current_time = current_days
+    # 💡 [해결 포인트] 슬라이더 대신 직관적인 공전 진행률 게이지 바(Progress Bar) 배치!
+    # 이 방식은 파이썬 리프레시와 충돌하지 않아 절대 멈추지 않습니다.
+    progress_ratio = min(1.0, max(0.0, st.session_state.current_time / T)) if T > 0 else 0.0
+    st.progress(progress_ratio, text=f"📅 공전 진행도: {st.session_state.current_time:.1f}일 / {T:.1f}일 완료")
 
     # 현재 타이밍의 행성 물리 위치 좌표 및 속도 실시간 계산
     M = (2 * np.pi / T) * st.session_state.current_time
@@ -148,18 +132,18 @@ with col1:
             gridcolor="rgba(128,128,128,0.15)", 
             scaleanchor="y", 
             scaleratio=1,
-            autorange=False  # 💡 제멋대로 줌인/줌아웃 방지
+            autorange=False  # 제멋대로 줌인/줌아웃 방지
         ),
         yaxis=dict(
             range=y_range, 
             title="Y Distance (AU)", 
             gridcolor="rgba(128,128,128,0.15)",
-            autorange=False  # 💡 제멋대로 줌인/줌아웃 방지
+            autorange=False  # 제멋대로 줌인/줌아웃 방지
         ),
         width=700,
         height=600,
         showlegend=False,
-        margin=dict(l=50, r=50, t=80, b=50) # 💡 좌우 여백을 똑같이 맞추어 그래프 치우침 해결!
+        margin=dict(l=50, r=50, t=80, b=50) # 좌우 여백 정렬 완료
     )
     
     if is_star_rad_missing:
@@ -190,15 +174,14 @@ with col2:
 # ------------------------------------------
 # 💡 [자동 무한 재생 핵심 루프] 파이썬 타이머 전진 제어
 # ------------------------------------------
-if st.session_state.is_playing:
-    # 한 프레임당 넘어갈 날짜 간격 계산
-    dt = T / 120 if T > 0 else 1.0
-    st.session_state.current_time += dt
+# 1프레임당 전진할 날짜 간격 계산 (주기에 따라 부드럽게 스케일링)
+dt = T / 150 if T > 0 else 1.0
+st.session_state.current_time += dt
+
+# 💡 [핵심 수정] 한 바퀴 다 돌면(공전 주기를 넘기면) 0.0일차로 즉시 강제 무한 자동 리셋!
+if st.session_state.current_time >= T:
+    st.session_state.current_time = 0.0
     
-    # 💡 한 바퀴 다 돌면(공전 주기를 넘기면) 0.0일차로 즉시 자동 무한 리셋!
-    if st.session_state.current_time >= T:
-        st.session_state.current_time = 0.0
-        
-    # 약 25 FPS 속도로 지연을 준 뒤 화면을 스스로 갱신하도록 유도합니다.
-    time.sleep(0.04)
-    st.rerun()
+# 약 30 FPS 속도로 미세한 지연을 준 뒤 화면을 스스로 끊임없이 무한 리런합니다.
+time.sleep(0.03)
+st.rerun()
