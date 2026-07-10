@@ -40,9 +40,9 @@ def solve_kepler(M, e):
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 부하 없이 완벽한 무한 공전 루프가 적용된 버전입니다.")
+st.markdown("NASA 아카이브 데이터를 기반으로 화면 요동침 없이 부드럽게 무한 공전하는 버전입니다.")
 
-# 💡 실시간 무한 루프 제어를 위한 핵심 세션 타이머 변수
+# 세션 타이머 변수 초기화
 if 'current_time' not in st.session_state:
     st.session_state.current_time = 0.0
 if 'is_playing' not in st.session_state:
@@ -69,23 +69,20 @@ star_rad = 1.0 if is_star_rad_missing else float(p_data['st_rad'])
 star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
 star_color, spectral_type = get_star_color_and_type(star_teff)
 
-# 💡 애니메이션 재생 상태 토글 버튼
+# 재생/일시정지 버튼
 if st.sidebar.button("▶ 재생 / ⏸ 일시정지 토글"):
     st.session_state.is_playing = not st.session_state.is_playing
 
 # ------------------------------------------
-# 💡 [핵심 최적화] 무한 루프를 도는 현재 프레임의 위치 계산
+# 타임라인 루프 및 좌표 계산
 # ------------------------------------------
-# 공전 주기에 맞춰 한 프레임에 전진할 시간 단위(dt) 결정
-dt = T / 100 if T > 0 else 1.0
+dt = T / 120 if T > 0 else 1.0
 
-# 만약 재생 상태라면 시간에 dt를 더해줌 (한 바퀴 돌면 0으로 완벽 리셋!)
 if st.session_state.is_playing:
     st.session_state.current_time += dt
     if st.session_state.current_time >= T:
         st.session_state.current_time = 0.0
 
-# 현재 타이밍의 행성 위치 및 속도 실시간 연산
 M = (2 * np.pi / T) * st.session_state.current_time
 E = solve_kepler(M, e)
 x_val = a * np.cos(E) - c
@@ -103,14 +100,15 @@ theta = np.linspace(0, 2 * np.pi, 200)
 x_orbit = a * np.cos(theta) - c
 y_orbit = b * np.sin(theta)
 
-# 크기 및 축 범위 매핑
+# 💡 [핵심 수정] 궤도 크기에 딱 맞게 축 범위를 미리 정적으로 고정 (요동침 원천 차단)
 if fix_scale:
     x_range = [-FIXED_LIMIT, FIXED_LIMIT]
     y_range = [-FIXED_LIMIT, FIXED_LIMIT]
     star_size = np.clip(star_rad * 6, 6, 40)
     planet_size = 5
 else:
-    limit = a * 1.3
+    # 행성이 도는 가장 먼 거리(원일점)를 기준으로 여유 공간(1.3배)을 주어 고정축 생성
+    limit = a * (1 + e) * 1.3
     x_range = [-limit - c, limit - c]
     y_range = [-limit, limit]
     star_size = np.clip(star_rad * 12, 12, 60)
@@ -124,14 +122,13 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
     
-    # 정적 차트만 출력하되, 시간의 변화를 Plotly가 가볍게 새로 갱신합니다.
     fig = go.Figure()
     
     # 1) 궤도선
     fig.add_trace(go.Scatter(x=x_orbit, y=y_orbit, mode='lines', line=dict(color='#4A90E2', width=1.5, dash='dash'), name='Orbit'))
     # 2) 중심 항성
     fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(color=star_color, size=star_size, line=dict(color='white', width=1)), name='Star'))
-    # 3) 행성 실시간 좌표 위치 매핑
+    # 3) 행성
     fig.add_trace(go.Scatter(x=[x_val], y=[y_val], mode='markers', marker=dict(color='#1dd1a1', size=planet_size), name='Planet'))
     
     fig.update_layout(
@@ -139,8 +136,20 @@ with col1:
         template="plotly_dark",
         paper_bgcolor="#111111",
         plot_bgcolor="#111111",
-        xaxis=dict(range=x_range, title="X Distance (AU)", gridcolor="rgba(128,128,128,0.15)", scaleanchor="y", scaleratio=1),
-        yaxis=dict(range=y_range, title="Y Distance (AU)", gridcolor="rgba(128,128,128,0.15)"),
+        xaxis=dict(
+            range=x_range, 
+            title="X Distance (AU)", 
+            gridcolor="rgba(128,128,128,0.15)", 
+            scaleanchor="y", 
+            scaleratio=1,
+            autorange=False  # 💡 Plotly가 제멋대로 축 범위를 바꾸지 못하도록 자동 스케일링 강제 해제!
+        ),
+        yaxis=dict(
+            range=y_range, 
+            title="Y Distance (AU)", 
+            gridcolor="rgba(128,128,128,0.15)",
+            autorange=False  # 💡 자동 스케일링 강제 해제!
+        ),
         width=700,
         height=600,
         showlegend=False
@@ -171,7 +180,7 @@ with col2:
     )
     st.markdown(info_text)
 
-# 💡 [무한 루프 핵심] 부하 방지를 위해 0.04초(약 25 FPS) 쉬어준 뒤 화면을 강제로 계속 다시 그립니다.
+# 25 FPS 속도로 프레임 재실행 루프 구동
 if st.session_state.is_playing:
     time.sleep(0.04)
     st.rerun()
