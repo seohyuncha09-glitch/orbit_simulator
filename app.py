@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import fsolve
 import plotly.graph_objects as go
+import time
 
 # ==========================================
 # 1. 데이터 불러오기
@@ -34,12 +35,18 @@ def solve_kepler(M, e):
     return fsolve(func, M)[0]
 
 # ==========================================
-# 2. 웹 UI 구성 및 레이아웃 정의
+# 2. 웹 UI 구성 및 세션 상태 정의
 # ==========================================
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 별도의 조작 없이 자동으로 영원히 공전합니다.")
+st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 별도의 클릭 없이 자동으로 무한 공전합니다.")
+
+# 실시간 시간 트래킹을 위한 세션 변수 (접속 시 바로 자동 재생 상태)
+if 'current_time' not in st.session_state:
+    st.session_state.current_time = 0.0
+if 'is_playing' not in st.session_state:
+    st.session_state.is_playing = True
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
@@ -62,15 +69,24 @@ star_rad = 1.0 if is_star_rad_missing else float(p_data['st_rad'])
 star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
 star_color, spectral_type = get_star_color_and_type(star_teff)
 
-# 독립적으로 초고속 작동하는 Fragment 블록
-@st.fragment
-def run_simulation_fragment():
-    # 정적 궤도선 데이터 사전 빌드
+# 사이드바 재생/일시정지 수동 버튼 추가
+if st.sidebar.button("▶ 재생 / ⏸ 일시정지 토글"):
+    st.session_state.is_playing = not st.session_state.is_playing
+
+# ------------------------------------------
+# 레이아웃 분할 및 시각화
+# ------------------------------------------
+col1, col2 = st.columns([2, 1])
+
+with col1:
+    st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
+    
+    # 정적 궤도선 데이터 사전 계산
     theta = np.linspace(0, 2 * np.pi, 200)
     x_orbit = a * np.cos(theta) - c
     y_orbit = b * np.sin(theta)
 
-    # 크기 및 고정축 범위 매핑
+    # 축 범위 강제 고정 락(Lock) 계산 (요동침/출렁거림 원천 차단)
     if fix_scale:
         x_range = [-FIXED_LIMIT, FIXED_LIMIT]
         y_range = [-FIXED_LIMIT, FIXED_LIMIT]
@@ -83,131 +99,106 @@ def run_simulation_fragment():
         star_size = np.clip(star_rad * 12, 12, 60)
         planet_size = 8
 
-    # 120개의 전체 타임라인 데이터 연산
-    num_frames = 120
-    times = np.linspace(0, T, num_frames)
-    x_coords = []
-    y_coords = []
-    speeds = []
+    # 💡 [슬라이더 부활] 화면 중앙에 Streamlit 순정 슬라이더 배치
+    # 사용자가 직접 조작할 수도 있고, 재생 시 시간에 따라 자동으로 바가 올라갑니다.
+    current_days = st.slider(
+        "📅 공전 경과 시간 (조작 가능)", 
+        min_value=0.0, 
+        max_value=float(T), 
+        value=float(st.session_state.current_time), 
+        step=max(0.1, T/200),
+        key="orbit_slider"
+    )
+    
+    # 사용자가 마우스로 슬라이더를 밀면 해당 시간으로 업데이트
+    if current_days != st.session_state.current_time:
+        st.session_state.current_time = current_days
 
-    for i in range(num_frames):
-        t_val = times[i]
-        M_val = (2 * np.pi / T) * t_val
-        E_val = solve_kepler(M_val, e)
-        x_p = a * np.cos(E_val) - c
-        y_p = b * np.sin(E_val)
-        x_coords.append(x_p)
-        y_coords.append(y_p)
-        
-        r_p = np.sqrt((x_p + c)**2 + y_p**2)
-        if r_p > 0 and (2 / r_p - 1 / a) > 0:
-            v_au = np.sqrt(mu * (2 / r_p - 1 / a))
-        else:
-            v_au = 0.0
-        speeds.append(v_au * 149597870.7 / 86400)
+    # 현재 타이밍의 행성 물리 위치 좌표 및 속도 실시간 계산
+    M = (2 * np.pi / T) * st.session_state.current_time
+    E = solve_kepler(M, e)
+    x_val = a * np.cos(E) - c
+    y_val = b * np.sin(E)
 
-    # 레이아웃 분할 배치
-    col1, col2 = st.columns([2, 1])
+    r_val = np.sqrt((x_val + c)**2 + y_val**2)
+    if r_val > 0 and (2 / r_val - 1 / a) > 0:
+        v_au_day = np.sqrt(mu * (2 / r_val - 1 / a))
+    else:
+        v_au_day = 0.0
+    v_kms = v_au_day * 149597870.7 / 86400
 
-    with col1:
-        st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
+    # Plotly 차트 레이아웃 구성 (치우침 없이 중앙 정렬 고정)
+    fig = go.Figure()
+    
+    # 1) 푸른색 궤도선 점선 배경
+    fig.add_trace(go.Scatter(x=x_orbit, y=y_orbit, mode='lines', line=dict(color='#4A90E2', width=1.5, dash='dash'), name='Orbit'))
+    # 2) 중심 태양(항성)
+    fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(color=star_color, size=star_size, line=dict(color='white', width=1)), name='Star'))
+    # 3) 초록색 외계행성 실시간 위치
+    fig.add_trace(go.Scatter(x=[x_val], y=[y_val], mode='markers', marker=dict(color='#1dd1a1', size=planet_size), name='Planet'))
+    
+    fig.update_layout(
+        title=dict(text=f"<b>Time: {st.session_state.current_time:.1f} / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {v_kms:.2f} km/s</span></b>", x=0.05, y=0.95, font=dict(color='white', size=14)),
+        template="plotly_dark",
+        paper_bgcolor="#111111",
+        plot_bgcolor="#111111",
+        xaxis=dict(
+            range=x_range, 
+            title="X Distance (AU)", 
+            gridcolor="rgba(128,128,128,0.15)", 
+            scaleanchor="y", 
+            scaleratio=1,
+            autorange=False  # 💡 제멋대로 줌인/줌아웃 방지
+        ),
+        yaxis=dict(
+            range=y_range, 
+            title="Y Distance (AU)", 
+            gridcolor="rgba(128,128,128,0.15)",
+            autorange=False  # 💡 제멋대로 줌인/줌아웃 방지
+        ),
+        width=700,
+        height=600,
+        showlegend=False,
+        margin=dict(l=50, r=50, t=80, b=50) # 💡 좌우 여백을 똑같이 맞추어 그래프 치우침 해결!
+    )
+    
+    if is_star_rad_missing:
+        st.warning("⚠️ 항성 반지름 데이터가 없어 기본 크기(1.0 Solar Rad)로 표시 중입니다.")
         
-        fig = go.Figure()
-        
-        # 기본 배치 레이어 (초기 위치)
-        fig.add_trace(go.Scatter(x=x_orbit, y=y_orbit, mode='lines', line=dict(color='#4A90E2', width=1.5, dash='dash'), name='Orbit'))
-        fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(color=star_color, size=star_size, line=dict(color='white', width=1)), name='Star'))
-        fig.add_trace(go.Scatter(x=[x_coords[0]], y=[y_coords[0]], mode='markers', marker=dict(color='#1dd1a1', size=planet_size), name='Planet'))
-        
-        # 자바스크립트 엔진에 전체 프레임 주입
-        frames_list = []
-        for i in range(num_frames):
-            f_data = [
-                go.Scatter(x=x_orbit, y=y_orbit),
-                go.Scatter(x=[0], y=[0]),
-                go.Scatter(x=[x_coords[i]], y=[y_coords[i]])
-            ]
-            f_layout = go.Layout(
-                title=dict(text=f"<b>Time: {times[i]:.1f} / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {speeds[i]:.2f} km/s</span></b>")
-            )
-            frames_list.append(go.Frame(data=f_data, name=f"frame{i}", layout=f_layout))
-            
-        fig.frames = frames_list
-        
-        # 하단 자바스크립트 슬라이더 정의
-        steps_list = []
-        for i in range(num_frames):
-            step = {
-                "args": [[f"frame{i}"], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}],
-                "label": f"{times[i]:.1f}d",
-                "method": "animate"
-            }
-            steps_list.append(step)
-            
-        slider_config = {
-            "active": 0,
-            "yanchor": "top", "xanchor": "left",
-            "currentvalue": {"font": {"size": 12, "color": "white"}, "prefix": "Days elapsed: ", "visible": True, "xanchor": "right"},
-            "transition": {"duration": 0},
-            "pad": {"b": 10, "t": 40}, "len": 0.95, "x": 0.02, "y": -0.08,
-            "steps": steps_list
-        }
-        
-        # 💡 [해결 핵심] 에러 나던 잘못된 구문을 삭제하고, updatemenus의 'active' 값을 활용해 로드되자마자 자동 실행 유도
-        fig.update_layout(
-            title=dict(text=f"<b>Time: 0.0 / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {speeds[0]:.2f} km/s</span></b>", x=0.05, y=0.95, font=dict(color='white', size=14)),
-            template="plotly_dark",
-            paper_bgcolor="#111111",
-            plot_bgcolor="#111111",
-            xaxis=dict(range=x_range, title="X Distance (AU)", gridcolor="rgba(128,128,128,0.15)", scaleanchor="y", scaleratio=1, autorange=False),
-            yaxis=dict(range=y_range, title="Y Distance (AU)", gridcolor="rgba(128,128,128,0.15)", autorange=False),
-            width=750,
-            height=650,
-            showlegend=False,
-            
-            # 눈에 보이지 않는 자동 재생 트리거 메뉴 배치
-            updatemenus=[{
-                "type": "buttons",
-                "showactive": True,
-                "active": 0, # 페이지 로드 시 첫 번째 버튼(재생)을 기본 활성화 상태로 강제 주입
-                "x": -1, "y": -1, # 화면 외부로 숨김
-                "buttons": [{
-                    "label": "AutoPlay",
-                    "method": "animate",
-                    "args": [None, {
-                        "frame": {"duration": 30, "redraw": False, "loop": True}, 
-                        "fromcurrent": True,
-                        "transition": {"duration": 0}
-                    }]
-                }]
-            }],
-            sliders=[slider_config]
-        )
-        
-        if is_star_rad_missing:
-            st.warning("⚠️ 항성 반지름 데이터가 없어 기본 크기(1.0 Solar Rad)로 표시 중입니다.")
-            
-        st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
 
-    with col2:
-        st.subheader("📊 데이터 대시보드")
-        def check_val(val, unit=""): return f"{val:.3f} {unit}" if not pd.isna(val) else "정보 없음"
-        star_rad_display = "정보 없음 (기본값)" if is_star_rad_missing else f"{star_rad:.3f} Solar Rad"
-        
-        info_text = (
-            f"### 🪐 행성 특성 정보\n"
-            f"* **이름:** `{p_data['pl_name']}`\n"
-            f"* **공전 주기:** `{T:.1f} 일` \n"
-            f"* **궤도 장반경 (거리):** `{a:.3f} AU` \n"
-            f"* **궤도 이심률 (타원형 정도):** `{e:.3f}` \n"
-            f"* **행성 반지름:** `정보 없음 (화면 고정)` \n\n"
-            f"### ☀️ 중심 항성(별) 정보\n"
-            f"* **분광형 유형:** `{spectral_type}` \n"
-            f"* **표면 온도:** `{check_val(star_teff, 'K')}` \n"
-            f"* **항성 반지름:** `{star_rad_display}` \n"
-            f"* **항성 질량:** `{check_val(p_data['st_mass'] if 'st_mass' in p_data else np.nan, 'Solar Mass')}`"
-        )
-        st.markdown(info_text)
+with col2:
+    st.subheader("📊 데이터 대시보드")
+    def check_val(val, unit=""): return f"{val:.3f} {unit}" if not pd.isna(val) else "정보 없음"
+    star_rad_display = "정보 없음 (기본값)" if is_star_rad_missing else f"{star_rad:.3f} Solar Rad"
+    
+    info_text = (
+        f"### 🪐 행성 특성 정보\n"
+        f"* **이름:** `{p_data['pl_name']}`\n"
+        f"* **공전 주기:** `{T:.1f} 일` \n"
+        f"* **궤도 장반경 (거리):** `{a:.3f} AU` \n"
+        f"* **궤도 이심률 (타원형 정도):** `{e:.3f}` \n"
+        f"* **행성 반지름:** `정보 없음 (화면 고정)` \n\n"
+        f"### ☀️ 중심 항성(별) 정보\n"
+        f"* **분광형 유형:** `{spectral_type}` \n"
+        f"* **표면 온도:** `{check_val(star_teff, 'K')}` \n"
+        f"* **항성 반지름:** `{star_rad_display}` \n"
+        f"* **항성 질량:** `{check_val(p_data['st_mass'] if 'st_mass' in p_data else np.nan, 'Solar Mass')}`"
+    )
+    st.markdown(info_text)
 
-# 독립 프래그먼트 실행
-run_simulation_fragment()
+# ------------------------------------------
+# 💡 [자동 무한 재생 핵심 루프] 파이썬 타이머 전진 제어
+# ------------------------------------------
+if st.session_state.is_playing:
+    # 한 프레임당 넘어갈 날짜 간격 계산
+    dt = T / 120 if T > 0 else 1.0
+    st.session_state.current_time += dt
+    
+    # 💡 한 바퀴 다 돌면(공전 주기를 넘기면) 0.0일차로 즉시 자동 무한 리셋!
+    if st.session_state.current_time >= T:
+        st.session_state.current_time = 0.0
+        
+    # 약 25 FPS 속도로 지연을 준 뒤 화면을 스스로 갱신하도록 유도합니다.
+    time.sleep(0.04)
+    st.rerun()
