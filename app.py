@@ -19,10 +19,10 @@ except Exception as e:
 # ==========================================
 # 2. 웹 UI 구성
 # ==========================================
-st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
+st.set_page_config(page_title="공전 궤도 시뮬레이터", layout="wide")
 
-st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 데이터를 기반으로 한 인터랙티브 시뮬레이터입니다. 이제 최대 5배 줌으로 항성 근처까지 탐사할 수 있습니다.")
+st.title("공전 궤도 시뮬레이터")
+st.markdown("NASA Exoplanet Archive를 기반으로 한 궤도 시뮬레티터입니다.")
 
 # ⚙️ 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
@@ -49,18 +49,33 @@ star_rad = 1.0 if is_star_rad_missing else float(p_data['st_rad'])
 star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
 star_mass = float(p_data['st_mass']) if 'st_mass' in p_data and not pd.isna(p_data['st_mass']) else 1.0
 
-# 골디락스 존(HZ) 범위
-hz_inner = 0.75 * np.sqrt(star_mass)
-hz_outer = 1.77 * np.sqrt(star_mass)
+# ==========================================
+# [수정] 항성의 실제 광도를 반영한 골디락스 존 계산
+# ==========================================
+# 1. 광도(L) 구하기 (태양 광도 기준 배율)
+if 'st_lum' in p_data and not pd.isna(p_data['st_lum']):
+    # 아카이브에 광도 데이터가 직접 존재하는 경우 (log10 형태가 아닐 때)
+    star_lum = 10**float(p_data['st_lum']) if 'log' in str(df['st_lum'].dtype) else float(p_data['st_lum'])
+elif not pd.isna(star_rad) and not pd.isna(star_teff):
+    # 반지름과 표면온도로 광도 유도 (L = R^2 * (T/T_sun)^4)
+    # 태양 표면온도 = 5778 K
+    star_lum = (star_rad**2) * ((star_teff / 5778)**4)
+else:
+    # 데이터가 아예 없으면 항성 질량을 이용해 약식 추정 (주계열성 L ~ M^3.5)
+    star_lum = star_mass**3.5
+
+# 2. 광도의 제곱근을 기반으로 정밀한 골디락스 존(HZ) 범위 계산
+hz_inner = 0.75 * np.sqrt(star_lum)
+hz_outer = 1.77 * np.sqrt(star_lum)
 
 def get_star_info(teff):
     if pd.isna(teff): return '#FF9F43', '정보 없음'
-    if teff >= 10000: return '#9bb0ff', 'O/B형 (고온)'
+    if teff >= 10000: return '#9bb0ff', 'O/B형 (청색)'
     elif teff >= 7500: return '#aabfff', 'A형 (백색)'
     elif teff >= 6000: return '#f8f7ff', 'F형 (황백색)'
-    elif teff >= 5200: return '#fff4ea', 'G형 (태양 유사)'
-    elif teff >= 3700: return '#ffd2a1', 'K형 (오렌지)'
-    else: return '#ff8585', 'M형 (적색왜성)'
+    elif teff >= 5200: return '#fff4ea', 'G형 (황색)'
+    elif teff >= 3700: return '#ffd2a1', 'K형 (주황색)'
+    else: return '#ff8585', 'M형 (적색)'
 
 star_color, star_spectral_type = get_star_info(star_teff)
 
@@ -70,7 +85,7 @@ star_color, star_spectral_type = get_star_info(star_teff)
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
+    st.subheader(f"✨ {selected_planet} 궤도 시뮬레이션")
     
     html_code = f"""
     <!DOCTYPE html>
@@ -254,7 +269,7 @@ with col1:
     st.components.v1.html(html_code, height=680)
 
 with col2:
-    st.subheader("📊 데이터 대시보드")
+    st.subheader("📊 데이터")
     def check_val(val, unit=""): return f"{val:.3f} {unit}" if not pd.isna(val) else "정보 없음"
     star_rad_display = "정보 없음" if is_star_rad_missing else f"{star_rad:.3f} Solar Rad"
     
