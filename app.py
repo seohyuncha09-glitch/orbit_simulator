@@ -21,7 +21,6 @@ except Exception as e:
 # ==========================================
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
-# 💡 복잡했던 커스텀 CSS 툴팁 코드를 모두 제거하여 코드가 훨씬 깔끔해졌습니다.
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
 st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 제어 패널에서 가이드선을 켜고, 메인 화면 하단 슬라이더로 줌을 조절해 보세요.")
 
@@ -29,16 +28,24 @@ st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 
 st.sidebar.header("⚙️ 제어 패널")
 selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
 
-# 💡 [순정 회색 물음표 구현] st.columns와 st.help 메커니즘을 시뮬레이션하기 위해 
-# 스트림릿 내장 캡션/텍스트 기능을 깔끔하게 녹였습니다. 
-# 스트림릿 체크박스 라벨 자체에는 help가 지원되지 않으므로, 아래처럼 바로 밑에 은은한 가이드 캡션을 깔아주는 것이 가장 순정스럽고 깔끔합니다.
-show_earth_orbit = st.sidebar.checkbox("🌍 지구 궤도 비교선 표시", value=False)
-st.sidebar.caption("💡 지구의 공전 궤도(거리 1.0 AU)를 회색 점선으로 겹쳐서 보여줍니다.")
+# 💡 [순정 툴팁 완벽 구현] 
+# 스트림릿의 빈 텍스트 영역에 help를 주는 방식을 결합하여, 
+# 평소엔 숨겨져 있다가 마우스를 올리면 정식 회색 물음표 툴팁이 나오도록 디자인했습니다.
 
-st.sidebar.markdown("---") # 구분을 위한 얇은 선
+# 1. 지구 궤도 비교선 및 순정 툴팁
+col_earth_chk, col_earth_help = st.sidebar.columns([8, 2])
+with col_earth_chk:
+    show_earth_orbit = st.checkbox("🌍 지구 궤도 비교선 표시", value=False)
+with col_earth_help:
+    st.text("").st_markdown("", help="우리 태양계 지구의 공전 궤도(반지름 1.0 AU, 이심률 0.0167)를 회색 점선으로 겹쳐서 보여줍니다. 외계행성 궤도 크기와 직관적인 비교가 가능합니다.")
 
-show_habitable_zone = st.sidebar.checkbox("🟢 골디락스 존 표시", value=False)
-st.sidebar.caption("💡 항성 질량 기준 생명체 거주 가능 구역을 초록색 띠로 보여줍니다.")
+# 2. 골디락스 존 및 순정 툴팁
+col_hz_chk, col_hz_help = st.sidebar.columns([8, 2])
+with col_hz_chk:
+    show_habitable_zone = st.checkbox("🟢 골디락스 존 표시", value=False)
+with col_hz_help:
+    st.text("").st_markdown("", help="생명체 거주 가능 구역(Habitable Zone)입니다. 중심 항성의 질량을 기반으로 계산되었으며, 행성 표면에 액체 상태의 물이 존재할 수 있는 거리 범위를 초록색 띠로 나타냅니다.")
+
 
 # 행성 데이터 추출
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
