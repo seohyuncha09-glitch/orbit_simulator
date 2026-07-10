@@ -11,20 +11,20 @@ import plotly.graph_objects as go
 def load_data():
     df_raw = pd.read_csv("PS_data.csv")
     
-    # 💡 [핵심 해결책] 연산과 UI 렌더링에 꼭 필요한 5대 핵심 물리량 검사
-    # 하나라도 NaN(결측치)이거나 0 이하인 불완전한 행성은 가차없이 버립니다.
-    required_cols = ['pl_orbsmax', 'pl_orbper', 'pl_orbeccen', 'st_rad', 'st_teff']
+    # 💡 [진짜 해결책] 연산 및 대시보드 출력에 필요한 모든 물리 컬럼을 검사합니다.
+    # 하나라도 빈 값(NaN)이 있으면 검색 목록에서 아예 제외합니다.
+    required_cols = ['pl_orbsmax', 'pl_orbper', 'pl_orbeccen', 'st_rad', 'st_teff', 'st_mass']
     
-    # 1) 필수 컬럼이 데이터셋에 존재하는지 확인 후 필터링
     for col in required_cols:
         if col in df_raw.columns:
             df_raw = df_raw[df_raw[col].notna()]
             
-    # 2) 물리적으로 불가능한 수치(음수 등) 제거
+    # 물리적으로 유효한 양수 데이터만 필터링
     df_raw = df_raw[df_raw['pl_orbsmax'] > 0]
     df_raw = df_raw[df_raw['pl_orbper'] > 0]
     df_raw = df_raw[df_raw['st_rad'] > 0]
     df_raw = df_raw[df_raw['st_teff'] > 0]
+    df_raw = df_raw[df_raw['st_mass'] > 0]
     
     return df_raw
 
@@ -35,9 +35,8 @@ except Exception as e:
     st.error("CSV 파일을 찾을 수 없거나 데이터 필터링 중 오류가 발생했습니다.")
     st.stop()
 
-# 만약 필터링 후 데이터가 하나도 없다면 안전장치
 if not all_planet_names:
-    st.error("⚠️ 필터링 조건에 맞는 완전한 데이터가 전무합니다. CSV 파일을 확인해 주세요.")
+    st.error("⚠️ 모든 필수 물리량(장반경, 주기, 이심률, 항성 반지름/온도/질량)이 완벽히 채워진 행성 데이터가 없습니다.")
     st.stop()
 
 FIXED_LIMIT = 15.0
@@ -67,14 +66,14 @@ st.sidebar.header("⚙️ 제어 패널")
 fix_scale = st.sidebar.checkbox("시뮬레이션 축 범위 고정 (⚠️천체 크기 연동)", value=False)
 selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
 
-# 행성 데이터 추출 (이미 완벽함이 검증된 데이터)
+# 행성 데이터 추출
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
 
 a = float(p_data['pl_orbsmax'])
 e = float(p_data['pl_orbeccen'])
 T = float(p_data['pl_orbper'])
 
-# 타원 기하학 연산
+# 타원 궤도 기하학 연산
 b = a * np.sqrt(1 - e**2)
 c = a * e
 mu = (4 * np.pi**2 * (a**3)) / (T**2)
@@ -82,6 +81,7 @@ mu = (4 * np.pi**2 * (a**3)) / (T**2)
 # 항성 정보 매핑
 star_rad = float(p_data['st_rad'])
 star_teff = float(p_data['st_teff'])
+star_mass = float(p_data['st_mass'])
 star_color, spectral_type = get_star_color_and_type(star_teff)
 
 # ------------------------------------------
@@ -156,7 +156,7 @@ with col1:
         
     fig.frames = frames_list
     
-    # 버튼 및 컨트롤러 딕셔너리 정돈
+    # 버튼 컨트롤러 설정
     play_button = {
         "label": "▶ Play", 
         "method": "animate", 
@@ -195,7 +195,6 @@ with col1:
         "steps": steps_list
     }
     
-    # 💡 갱신 레이아웃 속성을 완전히 고정값 형태로 주입
     fig.update_layout(
         title=dict(text=f"<b>Time: 0.0 / {T:.1f} days<br><span style='color:#1dd1a1'>Speed: {speeds[0]:.2f} km/s</span></b>", x=0.05, y=0.95, font=dict(color='white', size=14)),
         template="plotly_dark",
@@ -215,6 +214,7 @@ with col1:
 with col2:
     st.subheader("📊 데이터 대시보드")
     
+    # 💡 모든 변수가 float임이 상단에서 100% 검증되었으므로 포맷팅 에러가 절대 나지 않습니다.
     info_text = (
         f"### 🪐 행성 특성 정보\n"
         f"* **이름:** `{p_data['pl_name']}`\n"
@@ -226,6 +226,6 @@ with col2:
         f"* **분광형 유형:** `{spectral_type}` \n"
         f"* **표면 온도:** `{star_teff:.1f} K` \n"
         f"* **항성 반지름:** `{star_rad:.3f} Solar Rad` \n"
-        f"* **항성 질량:** `{p_data['st_mass']:.3f} Solar Mass`"
+        f"* **항성 질량:** `{star_mass:.3f} Solar Mass`"
     )
     st.markdown(info_text)
