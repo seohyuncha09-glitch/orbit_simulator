@@ -22,11 +22,14 @@ except Exception as e:
 st.set_page_config(page_title="천체 공전 궤도 시뮬레이터", layout="wide")
 
 st.title("🌌 외계행성 공전 궤도 시뮬레이터")
-st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 하단의 컨트롤러에서 재생 상태와 공전 속도를 실시간으로 제어할 수 있습니다.")
+st.markdown("NASA 아카이브 데이터를 기반으로 제작되었습니다. 제어 패널의 체크박스를 통해 우리 태양계(지구 궤도)와 크기를 비교해 보세요.")
 
 # 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
 selected_planet = st.sidebar.selectbox("🪐 탐색할 행성 선택", all_planet_names)
+
+# 💡 [4번 기능 추가] 태양계 비교 가이드선 활성화 체크박스
+show_earth_orbit = st.sidebar.checkbox("🌍 지구 궤도 비교선 표시 (1.0 AU)", value=False)
 
 # 행성 데이터 추출
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
@@ -61,7 +64,6 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.subheader(f"✨ {selected_planet} 궤도 애니메이션")
     
-    # 💡 html_code 앞에 f 접두사를 확실히 붙여 파이썬 변수가 정상 치환되도록 보장합니다.
     html_code = f"""
     <!DOCTYPE html>
     <html>
@@ -73,7 +75,6 @@ with col1:
             #infoOverlay {{ position: absolute; top: 15px; left: 20px; font-size: 15px; font-weight: bold; line-height: 1.5; pointer-events: none; z-index: 10; }}
             #speedText {{ color: #1dd1a1; }}
             
-            /* 하단 컨트롤러 영역 정렬 스타일 */
             #controlsContainer {{
                 position: absolute; bottom: 25px; left: 70px; 
                 display: flex; gap: 10px; align-items: center; z-index: 10;
@@ -123,6 +124,15 @@ with col1:
             const mu = {mu};
             const starColor = "{star_color}";
             
+            // 💡 스트림릿 체크박스로부터 지구 궤도 표시 여부 바인딩 (true / false)
+            const showEarthOrbit = {str(show_earth_orbit).lower()};
+            
+            // 실제 지구의 정확한 궤도 요소 정의 (1.0 AU, 이심률 0.0167)
+            const earthA = 1.0;
+            const earthE = 0.0167;
+            const earthB = earthA * Math.sqrt(1 - Math.pow(earthE, 2));
+            const earthC = earthA * earthE;
+            
             const paddingLeft = 70;
             const paddingRight = 40;
             const paddingTop = 40;
@@ -139,16 +149,14 @@ with col1:
             
             let currentDays = 0;
             let isPlaying = true;
-            let speedMultiplier = 1.0; // 기본 배속은 1.0 정속으로 출발
+            let speedMultiplier = 1.0;
             
-            // 재생 / 일시정지 이벤트 리스너
             controlBtn.addEventListener('click', () => {{
                 isPlaying = !isPlaying;
                 controlBtn.textContent = isPlaying ? "⏸ Pause" : "▶ Play";
                 if (isPlaying) draw();
             }});
             
-            // 💡 배속 버튼 클릭 이벤트 리스너 리스트 및 스타일 교체식 구현
             function updateSpeedSelection(activeBtn, targetMultiplier) {{
                 btn05.classList.remove('activeSpeed');
                 btn10.classList.remove('activeSpeed');
@@ -213,7 +221,27 @@ with col1:
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
                 ctx.strokeRect(paddingLeft, paddingTop, plotWidth, plotHeight);
 
-                // 2. 푸른색 공전 궤도선
+                // 💡 [4번 기능 포인트] 체크박스가 켜져 있으면 배경에 회색 점선으로 지구 공전 궤도 렌더링
+                if (showEarthOrbit) {{
+                    ctx.save();
+                    // 외계행성 계와 마찬가지로 항성(centerX, centerY)을 공유하도록 초점만큼 시프트
+                    ctx.translate(centerX + (earthC * scale), centerY);
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)'; // 연한 회색 가이드 라인
+                    ctx.lineWidth = 1.2;
+                    ctx.setLineDash([3, 6]); // 궤도선과 구별하기 위해 촘촘한 점선 스타일 적용
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, earthA * scale, earthB * scale, 0, 0, 2 * Math.PI);
+                    ctx.stroke();
+                    
+                    // 지구 레이블 텍스트 띄워주기
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                    ctx.font = "italic 11px 'Segoe UI'";
+                    ctx.textAlign = "left";
+                    ctx.fillText("Earth Orbit (1.0 AU)", (earthA - earthC) * scale + 5, 0);
+                    ctx.restore();
+                }}
+
+                // 2. 푸른색 외계행성 공전 궤도선
                 ctx.save();
                 ctx.translate(centerX + (c * scale), centerY);
                 ctx.strokeStyle = '#4A90E2';
@@ -262,7 +290,7 @@ with col1:
                 timeLabel.innerHTML = `<b>Time: ${{currentDays.toFixed(1)}} / ${{T.toFixed(1)}} days</b>`;
                 speedLabel.innerHTML = `<b>Speed: ${{v_kms.toFixed(2)}} km/s</b>`;
                 
-                // 7. 프레임 전진 (실시간 선택된 내부 speedMultiplier 적용)
+                // 7. 프레임 전진
                 let dt = (T / 350) * speedMultiplier; 
                 currentDays += dt;
                 if (currentDays >= T) currentDays = 0;
