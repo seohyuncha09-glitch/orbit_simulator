@@ -72,7 +72,8 @@ x_coords = []
 y_coords = []
 speeds = []
 
-for t in times:
+for i in range(num_frames):
+    t = times[i]
     M = (2 * np.pi / T) * t
     E = solve_kepler(M, e)
     x_val = a * np.cos(E) - c
@@ -137,14 +138,15 @@ with col1:
         
     fig.frames = frames_list
     
-    # 💡 [수정 핵심] "frame" 속성에 {"loop": True} 옵션을 추가하여 무한 궤도 회전 구현
+    # 💡 [수정 핵심] 슬라이더 컴포넌트와 프레임 간의 무한 동기화 루프 트리거 설정
     play_button = {
         "label": "▶ Play", 
         "method": "animate", 
         "args": [None, {
-            "frame": {"duration": 25, "redraw": False, "loop": True}, # 여기서 무한 루프 활성화!
+            "frame": {"duration": 25, "redraw": False}, 
             "fromcurrent": True, 
-            "transition": {"duration": 0}
+            "transition": {"duration": 0},
+            "mode": "immediate"
         }]
     }
     pause_button = {
