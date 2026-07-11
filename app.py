@@ -54,26 +54,17 @@ b = a * np.sqrt(1 - e**2)
 c = a * e
 mu = (4 * np.pi**2 * (a**3)) / (T**2) if T > 0 else 1.0
 
-# --------------------------------------------------
-# ☀️ 항성 물리 데이터 추출 및 슈테판-볼츠만 법칙 연산
-# --------------------------------------------------
+# 항성 정보 및 분광형 추출
 is_star_rad_missing = 'st_rad' not in p_data or pd.isna(p_data['st_rad'])
 star_rad = 1.0 if is_star_rad_missing else float(p_data['st_rad'])
-
-# 표면온도 데이터가 없을 경우 태양 기준값(5778.0 K)으로 안전하게 예외 처리
-star_teff = float(p_data['st_teff']) if 'st_teff' in p_data and not pd.isna(p_data['st_teff']) else 5778.0
+star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
 
 # 파일의 st_spectype 항목값 가져오기
 star_spectral_type = p_data['st_spectype'] if 'st_spectype' in p_data and not pd.isna(p_data['st_spectype']) else "정보 없음"
 
-# [슈테판-볼츠만 법칙 기반 광도(L) 정규화 연산]
-T_SUN = 5778.0
-star_luminosity = (star_rad ** 2) * ((star_teff / T_SUN) ** 4)
-
-# [정석 물리 공식을 활용한 골디락스 존 경계 산출] (안쪽 S=1.1, 바깥쪽 S=0.53)
-hz_inner = np.sqrt(star_luminosity / 1.1)
-hz_outer = np.sqrt(star_luminosity / 0.53)
-# --------------------------------------------------
+star_mass = float(p_data['st_mass']) if 'st_mass' in p_data and not pd.isna(p_data['st_mass']) else 1.0
+hz_inner = 0.953 * np.sqrt(star_mass)
+hz_outer = 1.373 * np.sqrt(star_mass)
 
 # 분광형 데이터(st_spectype) 첫 글자 기반 색상 지정 함수
 def get_star_color_by_spectype(spectype, teff):
@@ -264,7 +255,7 @@ with col1:
                 let M_val = (2 * Math.PI / T) * currentDays;
                 let E_val = M_val + e * Math.sin(M_val) + (e*e/2) * Math.sin(2*M_val);
                 
-                // 타원 궤도의 기준점 위치 방향 정상화 (-c 처리)
+                // 🛠️ [부호 교정] 타원 궤도의 기준점 위치 방향을 정상화 (-c 처리)
                 let planetX_AU = a * Math.cos(E_val) - c;
                 let planetY_AU = b * Math.sin(E_val);
                 
