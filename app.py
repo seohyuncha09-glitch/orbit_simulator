@@ -7,7 +7,6 @@ import pandas as pd
 # ==========================================
 @st.cache_data
 def load_data():
-    # 파일명을 업데이트된 CSV로 변경
     return pd.read_csv("PS_data_updated.csv")
 
 try:
@@ -20,10 +19,10 @@ except Exception as e:
 # ==========================================
 # 2. 웹 UI 구성
 # ==========================================
-st.set_page_config(page_title="행성 공전 궤도 시뮬레이터", layout="wide")
+st.set_page_config(page_title="행성 공전 궤도 시뮬레이터 (True Scale)", layout="wide")
 
-st.title("행성 공전 궤도 시뮬레이터")
-st.markdown("NASA Exoplanet Archive를 기반으로 제작되었습니다.")
+st.title("행성 공전 궤도 시뮬레이터 (실제 비율)")
+st.markdown("NASA Exoplanet Archive 기반. **행성과 항성의 크기가 100% 실제 물리적 비율(True Scale)로 렌더링됩니다.**")
 
 # ⚙️ 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
@@ -35,11 +34,10 @@ selected_planet = st.sidebar.selectbox(
 )
 
 st.sidebar.markdown("---")
-
-# 가이드선 체크박스들
 show_earth_orbit = st.sidebar.checkbox("🌍 지구 궤도 비교선 표시", value=False)
 show_habitable_zone = st.sidebar.checkbox("🟢 골디락스 존 표시", value=False)
-real_star_scale = st.sidebar.checkbox("🪐 실제 항성 비율로 보기", value=False)
+
+# 인위적인 비율 보기 체크박스는 삭제되었습니다 (전면 실제 비율 적용)
 
 # 행성 데이터 추출
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
@@ -47,7 +45,7 @@ a = float(p_data['pl_orbsmax'])
 e = float(p_data['pl_orbeccen']) if not pd.isna(p_data['pl_orbeccen']) else 0.0
 T = float(p_data['pl_orbper'])
 
-# ✨ [추가된 부분] 행성 반지름(지구 대비) 데이터 추출
+# 행성 반지름(지구 대비) 데이터 추출
 is_pl_rade_missing = 'pl_rade' not in p_data or pd.isna(p_data['pl_rade'])
 pl_rade = 1.0 if is_pl_rade_missing else float(p_data['pl_rade'])
 
@@ -55,7 +53,7 @@ b = a * np.sqrt(1 - e**2)
 c = a * e
 mu = (4 * np.pi**2 * (a**3)) / (T**2) if T > 0 else 1.0
 
-# 항성 정보 및 골디락스 존(HZ) 범위 연산
+# 항성 정보 추출
 is_star_rad_missing = 'st_rad' not in p_data or pd.isna(p_data['st_rad'])
 star_rad = 1.0 if is_star_rad_missing else float(p_data['st_rad'])
 star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
@@ -65,20 +63,13 @@ hz_inner = 0.75 * np.sqrt(star_mass)
 hz_outer = 1.77 * np.sqrt(star_mass)
 
 def get_star_info(teff):
-    if pd.isna(teff): 
-        return '#FF9F43', '정보 없음'
-    if teff >= 10000: 
-        return '#9bb0ff', 'O형 또는 B형 (청색)'
-    elif teff >= 7500: 
-        return '#aabfff', 'A형 (백색)'
-    elif teff >= 6000: 
-        return '#f8f7ff', 'F형 (황백색)'
-    elif teff >= 5200: 
-        return '#fff4ea', 'G형 (황색)'
-    elif teff >= 3700: 
-        return '#ffd2a1', 'K형 (주황색)'
-    else: 
-        return '#ff8585', 'M형 (적색)'
+    if pd.isna(teff): return '#FF9F43', '정보 없음'
+    if teff >= 10000: return '#9bb0ff', 'O형 또는 B형 (청색)'
+    elif teff >= 7500: return '#aabfff', 'A형 (백색)'
+    elif teff >= 6000: return '#f8f7ff', 'F형 (황백색)'
+    elif teff >= 5200: return '#fff4ea', 'G형 (황색)'
+    elif teff >= 3700: return '#ffd2a1', 'K형 (주황색)'
+    else: return '#ff8585', 'M형 (적색)'
 
 star_color, star_spectral_type = get_star_info(star_teff)
 
@@ -88,7 +79,7 @@ star_color, star_spectral_type = get_star_info(star_teff)
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.subheader(f"✨ {selected_planet} 궤도 시뮬레이션")
+    st.subheader(f"✨ {selected_planet} 실제 스케일 시뮬레이션")
     
     html_code = f"""
     <!DOCTYPE html>
@@ -96,7 +87,7 @@ with col1:
     <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
-            body {{ background-color: #111111; margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; }}
+            body {{ background-color: #111111; margin: 0; font-family: 'Segoe UI', sans-serif; color: white; }}
             #container {{ position: relative; width: 100%; max-width: 700px; margin: 0 auto; background: #111111; }}
             canvas {{ background: #111111; display: block; width: 100%; height: auto; }}
             
@@ -107,18 +98,20 @@ with col1:
                 background: #1a1a1a; padding: 15px; border-radius: 8px; margin-top: 10px;
                 display: flex; flex-direction: column; gap: 12px; border: 1px solid #333;
             }}
-            .row {{ display: flex; flex-wrap: wrap; gap: 15px; align-items: center; }}
+            .row {{ display: flex; flex-wrap: wrap; gap: 15px; align-items: center; justify-content: space-between; }}
             
             .uiBtn {{ 
                 background: #111111; border: 1px solid #555555; color: white; 
-                padding: 6px 14px; font-size: 13px; font-weight: bold; border-radius: 4px; cursor: pointer; 
-                transition: all 0.2s;
+                padding: 6px 14px; font-size: 13px; font-weight: bold; border-radius: 4px; cursor: pointer; transition: all 0.2s;
             }}
             .uiBtn:hover {{ background: #222222; border-color: #1dd1a1; color: #1dd1a1; }}
             .activeSpeed {{ background: #1dd1a1 !important; color: #111111 !important; border-color: #1dd1a1 !important; }}
             
             .sliderContainer {{ display: flex; align-items: center; gap: 10px; font-size: 13px; flex-grow: 1; }}
             .sliderContainer input {{ flex-grow: 1; cursor: pointer; accent-color: #1dd1a1; }}
+            
+            .checkboxContainer {{ display: flex; align-items: center; gap: 5px; font-size: 14px; font-weight: bold; color: #ff9f43; cursor: pointer; }}
+            .checkboxContainer input {{ cursor: pointer; transform: scale(1.2); accent-color: #ff9f43; }}
         </style>
     </head>
     <body>
@@ -132,17 +125,22 @@ with col1:
 
         <div id="mainControls">
             <div class="row">
-                <button id="controlBtn" class="uiBtn">⏸ Pause</button>
-                <button id="speed05" class="uiBtn">0.5x</button>
-                <button id="speed10" class="uiBtn activeSpeed">1.0x</button>
-                <button id="speed20" class="uiBtn">2.0x</button>
+                <div style="display: flex; gap: 10px;">
+                    <button id="controlBtn" class="uiBtn">⏸ Pause</button>
+                    <button id="speed05" class="uiBtn">0.5x</button>
+                    <button id="speed10" class="uiBtn activeSpeed">1.0x</button>
+                    <button id="speed20" class="uiBtn">2.0x</button>
+                </div>
+                <label class="checkboxContainer">
+                    <input type="checkbox" id="followPlanet"> 🎯 행성 카메라 추적
+                </label>
             </div>
             
             <div class="row">
                 <div class="sliderContainer">
-                    <span>🔍 줌 조절:</span>
-                    <input type="range" id="zoomSlider" min="0.1" max="3.0" step="0.1" value="1.0">
-                    <span id="zoomVal">1.0x</span>
+                    <span>🔍 기하급수적 줌 (실제 크기 관측용):</span>
+                    <input type="range" id="zoomSlider" min="-1" max="5.5" step="0.1" value="0">
+                    <span id="zoomVal" style="width: 50px; text-align: right;">1x</span>
                 </div>
             </div>
         </div>
@@ -150,6 +148,7 @@ with col1:
         <script>
             const canvas = document.getElementById('orbitCanvas');
             const ctx = canvas.getContext('2d');
+            
             const timeLabel = document.getElementById('timeText');
             const speedLabel = document.getElementById('speedText');
             
@@ -159,6 +158,11 @@ with col1:
             const btn20 = document.getElementById('speed20');
             const zoomSlider = document.getElementById('zoomSlider');
             const zoomVal = document.getElementById('zoomVal');
+            const followPlanetCb = document.getElementById('followPlanet');
+            
+            // 물리적 스케일 상수 (True Scale)
+            const SOLAR_RAD_TO_AU = 0.00465047;
+            const EARTH_RAD_TO_AU = 0.000042635;
             
             const a = {a};
             const e = {e};
@@ -170,19 +174,17 @@ with col1:
             
             const showEarthOrbit = {str(show_earth_orbit).lower()};
             const showHabitableZone = {str(show_habitable_zone).lower()};
-            const realStarScale = {str(real_star_scale).lower()};
             
             const hzInner = {hz_inner};
             const hzOuter = {hz_outer};
 
-            // ✨ 추가된 행성 크기 데이터 JS로 전달
+            const starRadAU = {star_rad} * SOLAR_RAD_TO_AU;
             const plRade = {pl_rade};
-            const isPlRadeMissing = {str(is_pl_rade_missing).lower()};
+            const planetRadAU = plRade * EARTH_RAD_TO_AU;
             
             const earthA = 1.0;
-            const earthE = 0.0167;
-            const earthB = earthA * Math.sqrt(1 - Math.pow(earthE, 2));
-            const earthC = earthA * earthE;
+            const earthB = Math.sqrt(1 - Math.pow(0.0167, 2));
+            const earthC = 0.0167;
             
             const paddingLeft = 70;
             const paddingRight = 40;
@@ -192,7 +194,8 @@ with col1:
             const plotWidth = canvas.width - (paddingLeft + paddingRight);
             const plotHeight = canvas.height - (paddingTop + paddingBottom);
             
-            const baseLimit = (a + c) * 1.3;
+            // 초기 뷰 제한 (궤도가 화면에 딱 맞게)
+            const baseLimitAU = (a + c) * 1.3; 
             
             let currentDays = 0;
             let isPlaying = true;
@@ -205,21 +208,24 @@ with col1:
                 if (isPlaying) draw();
             }});
             
-            function updateSpeedSelection(activeBtn, targetMultiplier) {{
-                btn05.classList.remove('activeSpeed');
-                btn10.classList.remove('activeSpeed');
-                btn20.classList.remove('activeSpeed');
-                activeBtn.classList.add('activeSpeed');
-                speedMultiplier = targetMultiplier;
+            function updateSpeed(btn, mult) {{
+                [btn05, btn10, btn20].forEach(b => b.classList.remove('activeSpeed'));
+                btn.classList.add('activeSpeed');
+                speedMultiplier = mult;
             }}
-            
-            btn05.addEventListener('click', () => updateSpeedSelection(btn05, 0.5));
-            btn10.addEventListener('click', () => updateSpeedSelection(btn10, 1.0));
-            btn20.addEventListener('click', () => updateSpeedSelection(btn20, 2.0));
+            btn05.addEventListener('click', () => updateSpeed(btn05, 0.5));
+            btn10.addEventListener('click', () => updateSpeed(btn10, 1.0));
+            btn20.addEventListener('click', () => updateSpeed(btn20, 2.0));
             
             zoomSlider.addEventListener('input', (event) => {{
-                currentZoom = parseFloat(event.target.value);
-                zoomVal.textContent = currentZoom.toFixed(1) + "x";
+                let power = parseFloat(event.target.value);
+                currentZoom = Math.pow(10, power);
+                
+                // 보기 좋게 포맷팅
+                let displayTxt = currentZoom >= 1000 ? 
+                                 (currentZoom/1000).toFixed(1) + "k x" : 
+                                 currentZoom.toFixed(1) + "x";
+                zoomVal.textContent = displayTxt;
             }});
 
             function draw() {{
@@ -227,95 +233,88 @@ with col1:
 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
-                let limit = baseLimit / currentZoom;
-                let scale = Math.min(plotWidth, plotHeight) / (2 * limit);
+                let baseScale = Math.min(plotWidth, plotHeight) / (2 * baseLimitAU);
+                let scale = baseScale * currentZoom;
                 
-                let centerX = paddingLeft + (plotWidth / 2) - (plotWidth * 0.15);
-                let centerY = paddingTop + (plotHeight / 2);
+                let screenCenterX = paddingLeft + (plotWidth / 2);
+                let screenCenterY = paddingTop + (plotHeight / 2);
                 
+                // 궤도 계산
+                let M_val = (2 * Math.PI / T) * currentDays;
+                let E_val = M_val + e * Math.sin(M_val) + (e*e/2) * Math.sin(2*M_val);
+                let planetX_AU = c + a * Math.cos(E_val);
+                let planetY_AU = b * Math.sin(E_val);
+                
+                // 카메라 포커스 계산
+                let focusX_AU = 0;
+                let focusY_AU = 0;
+                if (followPlanetCb.checked) {{
+                    focusX_AU = planetX_AU;
+                    focusY_AU = planetY_AU;
+                }}
+                
+                // 좌표 변환 유틸리티 (AU -> Canvas Px)
+                function toCanvasX(xAU) {{ return screenCenterX + (xAU - focusX_AU) * scale; }}
+                function toCanvasY(yAU) {{ return screenCenterY - (yAU - focusY_AU) * scale; }}
+                
+                // 그리드 렌더링 (동적 간격)
                 ctx.lineWidth = 1;
                 ctx.font = "11px 'Segoe UI'";
                 
-                let stepAU = 1;
-                if (limit > 3) stepAU = 1;
-                if (limit > 8) stepAU = 2;
-                if (limit > 20) stepAU = 5;
-                if (limit > 50) stepAU = 10;
-                if (limit > 150) stepAU = 50;
-                if (limit > 600) stepAU = 200;
-                if (limit < 1) stepAU = 0.2;
-                if (limit < 0.3) stepAU = 0.05;
+                let viewLimitAU = baseLimitAU / currentZoom;
+                let logStep = Math.floor(Math.log10(viewLimitAU));
+                let stepAU = Math.pow(10, logStep);
+                if (viewLimitAU / stepAU < 2) stepAU /= 5;
+                else if (viewLimitAU / stepAU < 5) stepAU /= 2;
+                
+                let startX_AU = Math.floor((focusX_AU - viewLimitAU*1.5) / stepAU) * stepAU;
+                let endX_AU = focusX_AU + viewLimitAU*1.5;
+                let startY_AU = Math.floor((focusY_AU - viewLimitAU*1.5) / stepAU) * stepAU;
+                let endY_AU = focusY_AU + viewLimitAU*1.5;
 
-                for (let xAU = -Math.floor(limit*2/stepAU)*stepAU; xAU <= limit * 2; xAU += stepAU) {{
-                    let canvasX = centerX + (xAU * scale);
-                    if (canvasX >= paddingLeft && canvasX <= paddingLeft + plotWidth) {{
-                        ctx.strokeStyle = Math.abs(xAU) < 0.001 ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.03)';
-                        ctx.beginPath(); ctx.moveTo(canvasX, paddingTop); ctx.lineTo(canvasX, paddingTop + plotHeight); ctx.stroke();
-                        ctx.fillStyle = '#888888';
-                        let decimals = stepAU < 1 ? (stepAU < 0.1 ? 2 : 1) : 0;
-                        ctx.fillText(xAU.toFixed(decimals) + " AU", canvasX, paddingTop + plotHeight + 6);
+                for (let xAU = startX_AU; xAU <= endX_AU; xAU += stepAU) {{
+                    let cx = toCanvasX(xAU);
+                    if (cx >= paddingLeft && cx <= paddingLeft + plotWidth) {{
+                        ctx.strokeStyle = Math.abs(xAU) < stepAU*0.1 ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.05)';
+                        ctx.beginPath(); ctx.moveTo(cx, paddingTop); ctx.lineTo(cx, paddingTop + plotHeight); ctx.stroke();
+                        ctx.fillStyle = '#888';
+                        let decimals = stepAU < 1 ? Math.max(0, -Math.floor(Math.log10(stepAU))) : 0;
+                        ctx.fillText(xAU.toFixed(decimals) + " AU", cx + 2, paddingTop + plotHeight + 12);
                     }}
                 }}
                 
-                for (let yAU = -Math.floor(limit*2/stepAU)*stepAU; yAU <= limit * 2; yAU += stepAU) {{
-                    let canvasY = centerY - (yAU * scale);
-                    if (canvasY >= paddingTop && canvasY <= paddingTop + plotHeight) {{
-                        ctx.strokeStyle = Math.abs(yAU) < 0.001 ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.03)';
-                        ctx.beginPath(); ctx.moveTo(paddingLeft, canvasY); ctx.lineTo(paddingLeft + plotWidth, canvasY); ctx.stroke();
-                        ctx.fillStyle = '#888888';
-                        let decimals = stepAU < 1 ? (stepAU < 0.1 ? 2 : 1) : 0;
-                        ctx.fillText(yAU.toFixed(decimals) + " AU", paddingLeft - 8, canvasY);
+                for (let yAU = startY_AU; yAU <= endY_AU; yAU += stepAU) {{
+                    let cy = toCanvasY(yAU);
+                    if (cy >= paddingTop && cy <= paddingTop + plotHeight) {{
+                        ctx.strokeStyle = Math.abs(yAU) < stepAU*0.1 ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.05)';
+                        ctx.beginPath(); ctx.moveTo(paddingLeft, cy); ctx.lineTo(paddingLeft + plotWidth, cy); ctx.stroke();
+                        ctx.fillStyle = '#888';
+                        let decimals = stepAU < 1 ? Math.max(0, -Math.floor(Math.log10(stepAU))) : 0;
+                        ctx.fillText(yAU.toFixed(decimals) + " AU", paddingLeft - 45, cy + 4);
                     }}
                 }}
-
+                
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
                 ctx.strokeRect(paddingLeft, paddingTop, plotWidth, plotHeight);
 
+                // 골디락스 존 렌더링
                 if (showHabitableZone) {{
                     ctx.save();
-                    ctx.translate(centerX, centerY);
+                    ctx.translate(toCanvasX(0), toCanvasY(0));
                     ctx.fillStyle = 'rgba(29, 209, 161, 0.08)';
-                    ctx.strokeStyle = 'rgba(29, 209, 161, 0.25)';
-                    ctx.lineWidth = 1;
-                    
                     ctx.beginPath();
                     ctx.arc(0, 0, hzOuter * scale, 0, 2 * Math.PI, false);
                     ctx.arc(0, 0, hzInner * scale, 0, 2 * Math.PI, true);
                     ctx.fill();
-                    
-                    ctx.beginPath();
-                    ctx.arc(0, 0, hzOuter * scale, 0, 2 * Math.PI);
-                    ctx.stroke();
-                    ctx.beginPath();
-                    ctx.arc(0, 0, hzInner * scale, 0, 2 * Math.PI);
-                    ctx.stroke();
-                    
-                    ctx.fillStyle = 'rgba(29, 209, 161, 0.5)';
-                    ctx.font = "italic 11px 'Segoe UI'";
-                    ctx.textAlign = "left";
-                    ctx.fillText("Habitable Zone", hzInner * scale + 5, -5);
+                    ctx.strokeStyle = 'rgba(29, 209, 161, 0.25)';
+                    ctx.beginPath(); ctx.arc(0, 0, hzOuter * scale, 0, 2 * Math.PI); ctx.stroke();
+                    ctx.beginPath(); ctx.arc(0, 0, hzInner * scale, 0, 2 * Math.PI); ctx.stroke();
                     ctx.restore();
                 }}
 
-                if (showEarthOrbit) {{
-                    ctx.save();
-                    ctx.translate(centerX + (earthC * scale), centerY);
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-                    ctx.lineWidth = 1.2;
-                    ctx.setLineDash([3, 6]);
-                    ctx.beginPath();
-                    ctx.ellipse(0, 0, earthA * scale, earthB * scale, 0, 0, 2 * Math.PI);
-                    ctx.stroke();
-                    
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-                    ctx.font = "italic 11px 'Segoe UI'";
-                    ctx.textAlign = "right";
-                    ctx.fillText("Earth Orbit (1.0 AU)", -(earthA + earthC) * scale - 5, 0);
-                    ctx.restore();
-                }}
-
+                // 행성 궤도 렌더링
                 ctx.save();
-                ctx.translate(centerX + (c * scale), centerY);
+                ctx.translate(toCanvasX(c), toCanvasY(0));
                 ctx.strokeStyle = '#4A90E2';
                 ctx.lineWidth = 1.5;
                 ctx.setLineDash([5, 5]);
@@ -324,56 +323,28 @@ with col1:
                 ctx.stroke();
                 ctx.restore();
                 
-                // ⚙️ 항성 크기 드로잉 알고리즘
+                // 항성 렌더링 (True Scale)
+                let renderStarRad = Math.max(0.5, starRadAU * scale); // 아무리 작아도 0.5px 점으로 유지
                 ctx.beginPath();
-                let finalStarRad = 6;
-                
-                if (realStarScale) {{
-                    let calculatedStarRad = {star_rad} * 1.5 * currentZoom; 
-                    let maxLimit = 15; 
-                    finalStarRad = Math.max(2, Math.min(calculatedStarRad, maxLimit));
-                }} else {{
-                    let calculatedStarRad = {star_rad} * 10 * currentZoom; 
-                    let maxLimit = 40 + (currentZoom * 25); 
-                    finalStarRad = Math.max(5, Math.min(calculatedStarRad, maxLimit));
-                }}
-                
-                ctx.arc(centerX, centerY, finalStarRad, 0, 2 * Math.PI);
+                ctx.arc(toCanvasX(0), toCanvasY(0), renderStarRad, 0, 2 * Math.PI);
                 ctx.fillStyle = starColor;
                 ctx.shadowColor = starColor;
-                ctx.shadowBlur = realStarScale ? 4 : 12; 
+                ctx.shadowBlur = renderStarRad > 2 ? renderStarRad : 0;
                 ctx.fill();
                 ctx.shadowBlur = 0;
-                ctx.strokeStyle = 'white';
-                ctx.lineWidth = realStarScale ? 0.5 : 1;
-                ctx.stroke();
                 
-                let M_val = (2 * Math.PI / T) * currentDays;
-                let E_val = M_val + e * Math.sin(M_val) + (e*e/2) * Math.sin(2*M_val);
-                
-                let planetX = centerX + (c * scale) + (a * scale * Math.cos(E_val));
-                let planetY = centerY + (b * scale * Math.sin(E_val));
-                
-                // ✨ 행성 크기 렌더링 (지구 비율에 맞춰 상대적으로 렌더링)
-                let planetRadPx = 6; // 기본값
-                if (!isPlRadeMissing) {{
-                    // 지구를 3.5픽셀 크기로 지정하고, 지구와 비교한 배수만큼 곱함. (목성은 약 39픽셀 정도 됨)
-                    // 최소 사이즈 2px 지정하여 너무 작아져서 안보이는 현상 방지.
-                    planetRadPx = Math.max(2, plRade * 3.5); 
-                }}
-
+                // 행성 렌더링 (True Scale)
+                let renderPlanetRad = Math.max(0.5, planetRadAU * scale); // 아무리 작아도 0.5px 점으로 유지
                 ctx.beginPath();
-                ctx.arc(planetX, planetY, planetRadPx, 0, 2 * Math.PI);
+                ctx.arc(toCanvasX(planetX_AU), toCanvasY(planetY_AU), renderPlanetRad, 0, 2 * Math.PI);
                 ctx.fillStyle = '#1dd1a1';
                 ctx.fill();
-                ctx.strokeStyle = '#ffffff';
-                ctx.stroke();
                 
-                let r_p = Math.sqrt(Math.pow((planetX - centerX)/scale, 2) + Math.pow((planetY - centerY)/scale, 2));
+                // 속도 계산
+                let r_p = Math.sqrt(planetX_AU*planetX_AU + planetY_AU*planetY_AU);
                 let v_kms = 0;
                 if (r_p > 0 && (2/r_p - 1/a) > 0) {{
-                    let v_au = Math.sqrt(mu * (2/r_p - 1/a));
-                    v_kms = v_au * 149597870.7 / 86400;
+                    v_kms = Math.sqrt(mu * (2/r_p - 1/a)) * 149597870.7 / 86400;
                 }}
                 
                 timeLabel.innerHTML = `<b>Time: ${{currentDays.toFixed(1)}} / ${{T.toFixed(1)}} days</b>`;
@@ -385,13 +356,11 @@ with col1:
                 
                 requestAnimationFrame(draw);
             }}
-            
             draw();
         </script>
     </body>
     </html>
     """
-    
     st.components.v1.html(html_code, height=660)
 
 with col2:
@@ -400,8 +369,6 @@ with col2:
     
     star_rad_display = "정보 없음 (기본값)" if is_star_rad_missing else f"{star_rad:.3f} Solar Rad"
     star_teff_display = f"{star_teff:.1f} K" if not pd.isna(star_teff) else "정보 없음"
-    
-    # ✨ 데이터 패널에 행성 크기 데이터 추가
     pl_rade_display = "정보 없음" if is_pl_rade_missing else f"{pl_rade:.3f} Earth Rad"
     
     info_text = (
