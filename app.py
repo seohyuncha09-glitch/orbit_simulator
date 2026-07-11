@@ -54,22 +54,20 @@ b = a * np.sqrt(1 - e**2)
 c = a * e
 mu = (4 * np.pi**2 * (a**3)) / (T**2) if T > 0 else 1.0
 
-# 1. 항성 반지름(st_rad)과 표면온도(st_teff) 데이터 안전하게 가져오기 (결측치 처리)
-    is_star_rad_missing = 'st_rad' not in p_data or pd.isna(p_data['st_rad'])
+is_star_rad_missing = 'st_rad' not in p_data or pd.isna(p_data['st_rad'])
     star_rad = 1.0 if is_star_rad_missing else float(p_data['st_rad'])
     
-    # 표면온도가 데이터에 없으면 태양 기준값(5778.0K)을 씁니다.
+    # 표면온도가 없으면 태양 기준값(5778K) 사용
     star_teff = float(p_data['st_teff']) if 'st_teff' in p_data and not pd.isna(p_data['st_teff']) else 5778.0
     
-    # 2. 에러가 나던 함수 호출 구간 (변수명을 일치시켜 안전하게 처리)
+    # 항성 색상 및 분광형 가져오기
     star_color, spectral_type = get_star_color_and_type(star_teff)
-    star_type_name = spectral_type  # 혹시 다른 곳에서 star_type_name 변수를 쓰더라도 에러가 안 나게 안전장치 추가
     
-    # 3. 슈테판-볼츠만 정규화 공식을 이용해 항성의 진짜 광도(L) 계산
+    # === 슈테판-볼츠만 법칙 기반 골디락스 존 연산 ===
     T_SUN = 5778.0
     star_luminosity = (star_rad ** 2) * ((star_teff / T_SUN) ** 4)
     
-    # 4. 선행 연구 이미지 공식 적용 (안쪽 1.1, 바깥쪽 0.53)
+    # 정석 공식 대입 (안쪽 1.1, 바깥쪽 0.53)
     hz_inner = np.sqrt(star_luminosity / 1.1)
     hz_outer = np.sqrt(star_luminosity / 0.53)
 
