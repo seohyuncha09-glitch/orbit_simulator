@@ -62,15 +62,23 @@ star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
 # 파일의 st_spectype 항목값 가져오기
 # [Python 코드 영역]
 
-# --- [기존 에러 발생 구간 수정] ---
+# --- [기존 에러 발생 구간 주변을 아래처럼 수정하세요] ---
 
+# 1. 데이터셋에서 표면온도(st_teff)와 반지름(st_rad)을 안전하게 가져오기 (결측치 처리)
+# 데이터가 비어있으면(Null) 태양 기준값인 5778.0K 와 1.0을 기본값으로 사용합니다.
 star_teff = float(p_data['st_teff']) if 'st_teff' in p_data and not pd.isna(p_data['st_teff']) else 5778.0
 star_rad = float(p_data['st_rad']) if 'st_rad' in p_data and not pd.isna(p_data['st_rad']) else 1.0
-star_spectral_type = p_data['st_spectype'] if 'st_spectype' in p_data and not pd.isna(p_data['st_spectype']) else 'G'
-star_color, star_type_name = get_star_color_and_type(star_teff) 
 
+# 2. 문제의 70번째 줄 함수 호출 (이제 star_teff 변수가 확실히 정의되었으므로 에러가 나지 않습니다)
+star_color, star_type_name = get_star_color_and_type(star_teff)
+
+# --- [여기서부터 슈테판-볼츠만 법칙으로 골디락스 존 계산] ---
 T_SUN = 5778.0
+
+# 우리가 앞서 유도한 슈테판-볼츠만 정규화 공식 적용 (태양 기준 광도 L 계산)
 star_luminosity = (star_rad ** 2) * ((star_teff / T_SUN) ** 4)
+
+# 이미지 속 정석 공식 그대로 루트(np.sqrt) 계산 대입 (안쪽 1.1, 바깥쪽 0.53)
 hz_inner = np.sqrt(star_luminosity / 1.1)
 hz_outer = np.sqrt(star_luminosity / 0.53)
 
