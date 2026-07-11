@@ -254,7 +254,9 @@ with col1:
                 
                 let M_val = (2 * Math.PI / T) * currentDays;
                 let E_val = M_val + e * Math.sin(M_val) + (e*e/2) * Math.sin(2*M_val);
-                let planetX_AU = c + a * Math.cos(E_val);
+                
+                // 🛠️ [부호 교정] 타원 궤도의 기준점 위치 방향을 정상화 (-c 처리)
+                let planetX_AU = a * Math.cos(E_val) - c;
                 let planetY_AU = b * Math.sin(E_val);
                 
                 let focusX_AU = 0;
@@ -322,10 +324,10 @@ with col1:
                     ctx.restore();
                 }}
 
-                // 지구 궤도 비교선 렌더링
+                // 지구 궤도 비교선 렌더링 (항성은 0,0에 위치하므로 -earthC 적용)
                 if (showEarthOrbit) {{
                     ctx.save();
-                    ctx.translate(toCanvasX(earthC), toCanvasY(0));
+                    ctx.translate(toCanvasX(-earthC), toCanvasY(0));
                     ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
                     ctx.lineWidth = 1.0;
                     ctx.setLineDash([2, 4]);
@@ -335,9 +337,9 @@ with col1:
                     ctx.restore();
                 }}
 
-                // 대상 행성 궤도선 그리기
+                // 대상 행성 궤도선 그리기 (항성은 0,0에 위치하므로 -c 적용)
                 ctx.save();
-                ctx.translate(toCanvasX(c), toCanvasY(0));
+                ctx.translate(toCanvasX(-c), toCanvasY(0));
                 ctx.strokeStyle = 'rgba(74, 144, 226, 0.6)';
                 ctx.lineWidth = 1.2;
                 ctx.setLineDash([4, 4]);
