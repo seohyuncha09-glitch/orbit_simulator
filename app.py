@@ -22,7 +22,7 @@ except Exception as e:
 st.set_page_config(page_title="행성 공전 궤도 시뮬레이터 (True Scale)", layout="wide")
 
 st.title("행성 공전 궤도 시뮬레이터 (실제 비율)")
-st.markdown("NASA Exoplanet Archive 기반. **행성과 항성의 크기가 100% 실제 물리적 비율(True Scale)로 렌더링됩니다.**")
+st.markdown("NASA Exoplanet Archive를 기반으로 제작되었습니다.**")
 
 # ⚙️ 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
@@ -38,7 +38,7 @@ show_earth_orbit = st.sidebar.checkbox("🌍 지구 궤도 비교선 표시", va
 show_habitable_zone = st.sidebar.checkbox("🟢 골디락스 존 표시", value=False)
 
 # 🎯 깔끔한 십자 조준선 제어
-highlight_planet = st.sidebar.checkbox("🎯 행성 추적 십자선(Crosshair) 표시", value=True)
+highlight_planet = st.sidebar.checkbox("🎯 행성 강조선 표시", value=True)
 
 # 행성 데이터 추출
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
@@ -94,7 +94,7 @@ star_color = get_star_color_by_spectype(star_spectral_type, star_teff)
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.subheader(f"✨ {selected_planet} 실제 스케일 시뮬레이션")
+    st.subheader(f"✨ {selected_planet} 궤도 시뮬레이")
     
     html_code = f"""
     <!DOCTYPE html>
@@ -147,7 +147,7 @@ with col1:
                     <button id="speed20" class="uiBtn">2.0x</button>
                 </div>
                 <label class="checkboxContainer">
-                    <input type="checkbox" id="followPlanet"> 🎯 행성 카메라 추적
+                    <input type="checkbox" id="followPlanet"> 행성 추적
                 </label>
             </div>
             
