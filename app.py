@@ -54,25 +54,39 @@ b = a * np.sqrt(1 - e**2)
 c = a * e
 mu = (4 * np.pi**2 * (a**3)) / (T**2) if T > 0 else 1.0
 
-# 항성 Information 추출
+# 항성 정보 및 분광형 추출
 is_star_rad_missing = 'st_rad' not in p_data or pd.isna(p_data['st_rad'])
 star_rad = 1.0 if is_star_rad_missing else float(p_data['st_rad'])
 star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
+
+# 파일의 st_spectype 항목값 가져오기
+star_spectral_type = p_data['st_spectype'] if 'st_spectype' in p_data and not pd.isna(p_data['st_spectype']) else "정보 없음"
 
 star_mass = float(p_data['st_mass']) if 'st_mass' in p_data and not pd.isna(p_data['st_mass']) else 1.0
 hz_inner = 0.75 * np.sqrt(star_mass)
 hz_outer = 1.77 * np.sqrt(star_mass)
 
-def get_star_info(teff):
-    if pd.isna(teff): return '#FF9F43', '정보 없음'
-    if teff >= 10000: return '#9bb0ff', 'O형 또는 B형 (청색)'
-    elif teff >= 7500: return '#aabfff', 'A형 (백색)'
-    elif teff >= 6000: return '#f8f7ff', 'F형 (황백색)'
-    elif teff >= 5200: return '#fff4ea', 'G형 (황색)'
-    elif teff >= 3700: return '#ffd2a1', 'K형 (주황색)'
-    else: return '#ff8585', 'M형 (적색)'
+# 분광형 데이터(st_spectype) 첫 글자 기반 색상 지정 함수
+def get_star_color_by_spectype(spectype, teff):
+    if spectype and spectype != "정보 없음":
+        first_char = str(spectype).strip().upper()[0]
+        if first_char in ['O', 'B']: return '#9bb0ff'
+        elif first_char == 'A': return '#aabfff'
+        elif first_char == 'F': return '#f8f7ff'
+        elif first_char == 'G': return '#fff4ea'
+        elif first_char == 'K': return '#ffd2a1'
+        elif first_char == 'M': return '#ff8585'
+    
+    # 분광형 정보가 비어있거나 불명확할 경우 표면온도로 폴백
+    if pd.isna(teff): return '#FF9F43'
+    if teff >= 10000: return '#9bb0ff'
+    elif teff >= 7500: return '#aabfff'
+    elif teff >= 6000: return '#f8f7ff'
+    elif teff >= 5200: return '#fff4ea'
+    elif teff >= 3700: return '#ffd2a1'
+    else: return '#ff8585'
 
-star_color, star_spectral_type = get_star_info(star_teff)
+star_color = get_star_color_by_spectype(star_spectral_type, star_teff)
 
 # ------------------------------------------
 # 레이아웃 분할 및 시각화
@@ -302,7 +316,7 @@ with col1:
                     ctx.restore();
                 }}
 
-                // 행성 궤도선
+                // 행성 궤도선 그리기
                 ctx.save();
                 ctx.translate(toCanvasX(c), toCanvasY(0));
                 ctx.strokeStyle = 'rgba(74, 144, 226, 0.6)';
@@ -328,24 +342,22 @@ with col1:
                 let pY = toCanvasY(planetY_AU);
                 let renderPlanetRad = Math.max(0.5, planetRadAU * scale); 
                 
-                // 정밀 십자선 렌더링 (동그라미 제거 버전)
+                // 정밀 십자선 렌더링
                 if (highlightPlanet) {{
                     ctx.save();
                     ctx.strokeStyle = 'rgba(29, 209, 161, 0.8)'; 
                     ctx.lineWidth = 1;
                     
                     ctx.beginPath();
-                    // 가로 십자선 (가운데 5px 공백 처리)
                     ctx.moveTo(pX - 16, pY); ctx.lineTo(pX - 5, pY);
                     ctx.moveTo(pX + 5, pY); ctx.lineTo(pX + 16, pY);
-                    // 세로 십자선 (가운데 5px 공백 처리)
                     ctx.moveTo(pX, pY - 16); ctx.lineTo(pX, pY - 5);
                     ctx.moveTo(pX, pY + 5); ctx.lineTo(pX, pY + 16);
                     ctx.stroke();
                     ctx.restore();
                 }}
                 
-                // 실제 크기의 행성 (너무 작을 땐 최소 점 크기로 표시됨)
+                // 실제 크기의 행성 점 렌더링
                 ctx.beginPath();
                 ctx.arc(pX, pY, renderPlanetRad, 0, 2 * Math.PI);
                 ctx.fillStyle = '#1dd1a1';
@@ -393,6 +405,6 @@ with col2:
         f"* **항성 반지름:** `{star_rad_display}` \n"
         f"* **항성 질량:** `{check_val(p_data['st_mass'] if 'st_mass' in p_data else np.nan, 'Solar Mass')}`\n"
         f"* **항성 표면온도:** `{star_teff_display}`\n"
-        f"* **분광형:** ` {star_spectral_type} `"
+        f"* **분광형:** ` {star_spectral_type} `"  # 원본 항목값 그대로 노출
     )
     st.markdown(info_text)
