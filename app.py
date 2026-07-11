@@ -54,33 +54,24 @@ b = a * np.sqrt(1 - e**2)
 c = a * e
 mu = (4 * np.pi**2 * (a**3)) / (T**2) if T > 0 else 1.0
 
-# 항성 정보 및 분광형 추출
-is_star_rad_missing = 'st_rad' not in p_data or pd.isna(p_data['st_rad'])
-star_rad = 1.0 if is_star_rad_missing else float(p_data['st_rad'])
-star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
-
-# 파일의 st_spectype 항목값 가져오기
-# [Python 코드 영역]
-
-# --- [기존 에러 발생 구간 주변을 아래처럼 수정하세요] ---
-
-# 1. 데이터셋에서 표면온도(st_teff)와 반지름(st_rad)을 안전하게 가져오기 (결측치 처리)
-# 데이터가 비어있으면(Null) 태양 기준값인 5778.0K 와 1.0을 기본값으로 사용합니다.
-star_teff = float(p_data['st_teff']) if 'st_teff' in p_data and not pd.isna(p_data['st_teff']) else 5778.0
-star_rad = float(p_data['st_rad']) if 'st_rad' in p_data and not pd.isna(p_data['st_rad']) else 1.0
-
-# 2. 문제의 70번째 줄 함수 호출 (이제 star_teff 변수가 확실히 정의되었으므로 에러가 나지 않습니다)
-star_color, star_type_name = get_star_color_and_type(star_teff)
-
-# --- [여기서부터 슈테판-볼츠만 법칙으로 골디락스 존 계산] ---
-T_SUN = 5778.0
-
-# 우리가 앞서 유도한 슈테판-볼츠만 정규화 공식 적용 (태양 기준 광도 L 계산)
-star_luminosity = (star_rad ** 2) * ((star_teff / T_SUN) ** 4)
-
-# 이미지 속 정석 공식 그대로 루트(np.sqrt) 계산 대입 (안쪽 1.1, 바깥쪽 0.53)
-hz_inner = np.sqrt(star_luminosity / 1.1)
-hz_outer = np.sqrt(star_luminosity / 0.53)
+# 1. 항성 반지름(st_rad)과 표면온도(st_teff) 데이터 안전하게 가져오기 (결측치 처리)
+    is_star_rad_missing = 'st_rad' not in p_data or pd.isna(p_data['st_rad'])
+    star_rad = 1.0 if is_star_rad_missing else float(p_data['st_rad'])
+    
+    # 표면온도가 데이터에 없으면 태양 기준값(5778.0K)을 씁니다.
+    star_teff = float(p_data['st_teff']) if 'st_teff' in p_data and not pd.isna(p_data['st_teff']) else 5778.0
+    
+    # 2. 에러가 나던 함수 호출 구간 (변수명을 일치시켜 안전하게 처리)
+    star_color, spectral_type = get_star_color_and_type(star_teff)
+    star_type_name = spectral_type  # 혹시 다른 곳에서 star_type_name 변수를 쓰더라도 에러가 안 나게 안전장치 추가
+    
+    # 3. 슈테판-볼츠만 정규화 공식을 이용해 항성의 진짜 광도(L) 계산
+    T_SUN = 5778.0
+    star_luminosity = (star_rad ** 2) * ((star_teff / T_SUN) ** 4)
+    
+    # 4. 선행 연구 이미지 공식 적용 (안쪽 1.1, 바깥쪽 0.53)
+    hz_inner = np.sqrt(star_luminosity / 1.1)
+    hz_outer = np.sqrt(star_luminosity / 0.53)
 
 # 분광형 데이터(st_spectype) 첫 글자 기반 색상 지정 함수
 def get_star_color_by_spectype(spectype, teff):
