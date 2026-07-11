@@ -37,8 +37,8 @@ st.sidebar.markdown("---")
 show_earth_orbit = st.sidebar.checkbox("🌍 지구 궤도 비교선 표시", value=False)
 show_habitable_zone = st.sidebar.checkbox("🟢 골디락스 존 표시", value=False)
 
-# ✨ [추가] 행성 강조 표시 체크박스
-highlight_planet = st.sidebar.checkbox("✨ 행성 위치 강조 (발광 효과)", value=True)
+# 🎯 깔끔한 타겟 지시선으로 변경
+highlight_planet = st.sidebar.checkbox("🎯 행성 추적 조준선(Crosshair) 표시", value=True)
 
 # 행성 데이터 추출
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
@@ -111,8 +111,8 @@ with col1:
             .sliderContainer {{ display: flex; align-items: center; gap: 10px; font-size: 13px; flex-grow: 1; }}
             .sliderContainer input {{ flex-grow: 1; cursor: pointer; accent-color: #1dd1a1; }}
             
-            .checkboxContainer {{ display: flex; align-items: center; gap: 5px; font-size: 14px; font-weight: bold; color: #ff9f43; cursor: pointer; }}
-            .checkboxContainer input {{ cursor: pointer; transform: scale(1.2); accent-color: #ff9f43; }}
+            .checkboxContainer {{ display: flex; align-items: center; gap: 5px; font-size: 14px; font-weight: bold; color: #4a90e2; cursor: pointer; }}
+            .checkboxContainer input {{ cursor: pointer; transform: scale(1.2); accent-color: #4a90e2; }}
         </style>
     </head>
     <body>
@@ -161,7 +161,6 @@ with col1:
             const zoomVal = document.getElementById('zoomVal');
             const followPlanetCb = document.getElementById('followPlanet');
             
-            // 물리적 스케일 상수 (True Scale)
             const SOLAR_RAD_TO_AU = 0.00465047;
             const EARTH_RAD_TO_AU = 0.000042635;
             
@@ -175,7 +174,7 @@ with col1:
             
             const showEarthOrbit = {str(show_earth_orbit).lower()};
             const showHabitableZone = {str(show_habitable_zone).lower()};
-            const highlightPlanet = {str(highlight_planet).lower()}; // ✨ 강조 상태 변수 받아오기
+            const highlightPlanet = {str(highlight_planet).lower()};
             
             const hzInner = {hz_inner};
             const hzOuter = {hz_outer};
@@ -183,10 +182,6 @@ with col1:
             const starRadAU = {star_rad} * SOLAR_RAD_TO_AU;
             const plRade = {pl_rade};
             const planetRadAU = plRade * EARTH_RAD_TO_AU;
-            
-            const earthA = 1.0;
-            const earthB = Math.sqrt(1 - Math.pow(0.0167, 2));
-            const earthC = 0.0167;
             
             const paddingLeft = 70;
             const paddingRight = 40;
@@ -238,13 +233,11 @@ with col1:
                 let screenCenterX = paddingLeft + (plotWidth / 2);
                 let screenCenterY = paddingTop + (plotHeight / 2);
                 
-                // 궤도 계산
                 let M_val = (2 * Math.PI / T) * currentDays;
                 let E_val = M_val + e * Math.sin(M_val) + (e*e/2) * Math.sin(2*M_val);
                 let planetX_AU = c + a * Math.cos(E_val);
                 let planetY_AU = b * Math.sin(E_val);
                 
-                // 카메라 포커스 계산
                 let focusX_AU = 0;
                 let focusY_AU = 0;
                 if (followPlanetCb.checked) {{
@@ -295,7 +288,6 @@ with col1:
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
                 ctx.strokeRect(paddingLeft, paddingTop, plotWidth, plotHeight);
 
-                // 골디락스 존 렌더링
                 if (showHabitableZone) {{
                     ctx.save();
                     ctx.translate(toCanvasX(0), toCanvasY(0));
@@ -310,18 +302,18 @@ with col1:
                     ctx.restore();
                 }}
 
-                // 행성 궤도 렌더링
+                // 행성 궤도선
                 ctx.save();
                 ctx.translate(toCanvasX(c), toCanvasY(0));
-                ctx.strokeStyle = '#4A90E2';
-                ctx.lineWidth = 1.5;
-                ctx.setLineDash([5, 5]);
+                ctx.strokeStyle = 'rgba(74, 144, 226, 0.6)';
+                ctx.lineWidth = 1.2;
+                ctx.setLineDash([4, 4]);
                 ctx.beginPath();
                 ctx.ellipse(0, 0, a * scale, b * scale, 0, 0, 2 * Math.PI);
                 ctx.stroke();
                 ctx.restore();
                 
-                // 항성 렌더링 (True Scale)
+                // 항성 렌더링
                 let renderStarRad = Math.max(0.5, starRadAU * scale); 
                 ctx.beginPath();
                 ctx.arc(toCanvasX(0), toCanvasY(0), renderStarRad, 0, 2 * Math.PI);
@@ -331,24 +323,33 @@ with col1:
                 ctx.fill();
                 ctx.shadowBlur = 0;
                 
-                // 행성 렌더링 (True Scale)
+                // 행성 좌표
                 let pX = toCanvasX(planetX_AU);
                 let pY = toCanvasY(planetY_AU);
                 let renderPlanetRad = Math.max(0.5, planetRadAU * scale); 
                 
-                // ✨ [추가] 행성 강조 표시 스크립트 효과
+                // 🎯 [수정] 테크니컬한 얇은 크로스헤어(조준선) 효과 적용
                 if (highlightPlanet) {{
                     ctx.save();
+                    ctx.strokeStyle = 'rgba(29, 209, 161, 0.7)'; // 차분한 민트색 관측선
+                    ctx.lineWidth = 1;
+                    
+                    // 중앙 미세 원
                     ctx.beginPath();
-                    ctx.arc(pX, pY, Math.max(8, renderPlanetRad + 5), 0, 2 * Math.PI);
-                    ctx.strokeStyle = 'rgba(29, 209, 161, 0.6)';
-                    ctx.lineWidth = 1.5;
-                    ctx.shadowColor = '#1dd1a1';
-                    ctx.shadowBlur = 10; // 멀리서도 번쩍이도록 네온 효과 부여
+                    ctx.arc(pX, pY, 7, 0, 2 * Math.PI);
+                    ctx.stroke();
+                    
+                    // 십자 지시선 (+)
+                    ctx.beginPath();
+                    ctx.moveTo(pX - 15, pY); ctx.lineTo(pX - 9, pY);
+                    ctx.moveTo(pX + 9, pY); ctx.lineTo(pX + 15, pY);
+                    ctx.moveTo(pX, pY - 15); ctx.lineTo(pX, pY - 9);
+                    ctx.moveTo(pX, pY + 9); ctx.lineTo(pX, pY + 15);
                     ctx.stroke();
                     ctx.restore();
                 }}
                 
+                // 실제 행성 (점)
                 ctx.beginPath();
                 ctx.arc(pX, pY, renderPlanetRad, 0, 2 * Math.PI);
                 ctx.fillStyle = '#1dd1a1';
