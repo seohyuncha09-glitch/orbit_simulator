@@ -7,13 +7,14 @@ import pandas as pd
 # ==========================================
 @st.cache_data
 def load_data():
-    return pd.read_csv("PS_data.csv")
+    # 파일명을 업데이트된 CSV로 변경
+    return pd.read_csv("PS_data_updated.csv")
 
 try:
     df = load_data()
     all_planet_names = sorted(df['pl_name'].dropna().unique())
 except Exception as e:
-    st.error("CSV 파일을 찾을 수 없습니다. GitHub 저장소에 'PS_data.csv' 파일이 있는지 확인해 주세요.")
+    st.error("CSV 파일을 찾을 수 없습니다. GitHub 저장소에 'PS_data_updated.csv' 파일이 있는지 확인해 주세요.")
     st.stop()
 
 # ==========================================
@@ -38,8 +39,6 @@ st.sidebar.markdown("---")
 # 가이드선 체크박스들
 show_earth_orbit = st.sidebar.checkbox("🌍 지구 궤도 비교선 표시", value=False)
 show_habitable_zone = st.sidebar.checkbox("🟢 골디락스 존 표시", value=False)
-
-# ✨ [새로 추가된 기능] 실제 항성 비율 보기 체크박스
 real_star_scale = st.sidebar.checkbox("🪐 실제 항성 비율로 보기", value=False)
 
 # 행성 데이터 추출
@@ -47,6 +46,10 @@ p_data = df[df['pl_name'] == selected_planet].iloc[0]
 a = float(p_data['pl_orbsmax'])
 e = float(p_data['pl_orbeccen']) if not pd.isna(p_data['pl_orbeccen']) else 0.0
 T = float(p_data['pl_orbper'])
+
+# ✨ [추가된 부분] 행성 반지름(지구 대비) 데이터 추출
+is_pl_rade_missing = 'pl_rade' not in p_data or pd.isna(p_data['pl_rade'])
+pl_rade = 1.0 if is_pl_rade_missing else float(p_data['pl_rade'])
 
 b = a * np.sqrt(1 - e**2)
 c = a * e
@@ -171,6 +174,10 @@ with col1:
             
             const hzInner = {hz_inner};
             const hzOuter = {hz_outer};
+
+            // ✨ 추가된 행성 크기 데이터 JS로 전달
+            const plRade = {pl_rade};
+            const isPlRadeMissing = {str(is_pl_rade_missing).lower()};
             
             const earthA = 1.0;
             const earthE = 0.0167;
@@ -210,8 +217,8 @@ with col1:
             btn10.addEventListener('click', () => updateSpeedSelection(btn10, 1.0));
             btn20.addEventListener('click', () => updateSpeedSelection(btn20, 2.0));
             
-            zoomSlider.addEventListener('input', (e) => {{
-                currentZoom = parseFloat(e.target.value);
+            zoomSlider.addEventListener('input', (event) => {{
+                currentZoom = parseFloat(event.target.value);
                 zoomVal.textContent = currentZoom.toFixed(1) + "x";
             }});
 
@@ -317,17 +324,15 @@ with col1:
                 ctx.stroke();
                 ctx.restore();
                 
-                // ⚙️ 항성 크기 드로잉 알고리즘 (체크박스 상태에 따라 분기)
+                // ⚙️ 항성 크기 드로잉 알고리즘
                 ctx.beginPath();
                 let finalStarRad = 6;
                 
                 if (realStarScale) {{
-                    // 1. 현실 고증 버전 (광활한 우주 공간 대비 아주 작게 표현)
                     let calculatedStarRad = {star_rad} * 1.5 * currentZoom; 
                     let maxLimit = 15; 
                     finalStarRad = Math.max(2, Math.min(calculatedStarRad, maxLimit));
                 }} else {{
-                    // 2. 가독성 우선 버전 (줌에 맞춰 기분 좋게 가변적으로 커지는 방식)
                     let calculatedStarRad = {star_rad} * 10 * currentZoom; 
                     let maxLimit = 40 + (currentZoom * 25); 
                     finalStarRad = Math.max(5, Math.min(calculatedStarRad, maxLimit));
@@ -336,7 +341,7 @@ with col1:
                 ctx.arc(centerX, centerY, finalStarRad, 0, 2 * Math.PI);
                 ctx.fillStyle = starColor;
                 ctx.shadowColor = starColor;
-                ctx.shadowBlur = realStarScale ? 4 : 12; // 현실 고증일 땐 빛 번짐도 앙증맞게 축소
+                ctx.shadowBlur = realStarScale ? 4 : 12; 
                 ctx.fill();
                 ctx.shadowBlur = 0;
                 ctx.strokeStyle = 'white';
@@ -344,13 +349,21 @@ with col1:
                 ctx.stroke();
                 
                 let M_val = (2 * Math.PI / T) * currentDays;
-                let E = M_val + e * Math.sin(M_val) + (e*e/2) * Math.sin(2*M_val);
+                let E_val = M_val + e * Math.sin(M_val) + (e*e/2) * Math.sin(2*M_val);
                 
-                let planetX = centerX + (c * scale) + (a * scale * Math.cos(E));
-                let planetY = centerY + (b * scale * Math.sin(E));
+                let planetX = centerX + (c * scale) + (a * scale * Math.cos(E_val));
+                let planetY = centerY + (b * scale * Math.sin(E_val));
                 
+                // ✨ 행성 크기 렌더링 (지구 비율에 맞춰 상대적으로 렌더링)
+                let planetRadPx = 6; // 기본값
+                if (!isPlRadeMissing) {{
+                    // 지구를 3.5픽셀 크기로 지정하고, 지구와 비교한 배수만큼 곱함. (목성은 약 39픽셀 정도 됨)
+                    // 최소 사이즈 2px 지정하여 너무 작아져서 안보이는 현상 방지.
+                    planetRadPx = Math.max(2, plRade * 3.5); 
+                }}
+
                 ctx.beginPath();
-                ctx.arc(planetX, planetY, 6, 0, 2 * Math.PI);
+                ctx.arc(planetX, planetY, planetRadPx, 0, 2 * Math.PI);
                 ctx.fillStyle = '#1dd1a1';
                 ctx.fill();
                 ctx.strokeStyle = '#ffffff';
@@ -384,12 +397,17 @@ with col1:
 with col2:
     st.subheader("📊 데이터")
     def check_val(val, unit=""): return f"{val:.3f} {unit}" if not pd.isna(val) else "정보 없음"
+    
     star_rad_display = "정보 없음 (기본값)" if is_star_rad_missing else f"{star_rad:.3f} Solar Rad"
     star_teff_display = f"{star_teff:.1f} K" if not pd.isna(star_teff) else "정보 없음"
+    
+    # ✨ 데이터 패널에 행성 크기 데이터 추가
+    pl_rade_display = "정보 없음" if is_pl_rade_missing else f"{pl_rade:.3f} Earth Rad"
     
     info_text = (
         f"### 🪐 행성 특성 정보\n"
         f"* **이름:** `{p_data['pl_name']}`\n"
+        f"* **행성 반지름:** `{pl_rade_display}` \n"
         f"* **공전 주기:** `{T:.1f} 일` \n"
         f"* **궤도 장반경:** `{a:.3f} AU` \n"
         f"* **궤도 이심률:** `{e:.3f}` \n\n"
