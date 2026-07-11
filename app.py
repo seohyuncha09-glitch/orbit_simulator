@@ -21,7 +21,7 @@ except Exception as e:
 # ==========================================
 st.set_page_config(page_title="행성 공전 궤도 시뮬레이터 (True Scale)", layout="wide")
 
-st.title("행성 공전 궤도 시뮬레이터 (실제 비율)")
+st.title("행성 공전 궤도 시뮬레이터")
 st.markdown("NASA Exoplanet Archive를 기반으로 제작되었습니다.**")
 
 # ⚙️ 사이드바 제어 패널
