@@ -197,6 +197,11 @@ with col1:
             const plRade = {pl_rade};
             const planetRadAU = plRade * EARTH_RAD_TO_AU;
             
+            // 지구 데이터 (비교선용)
+            const earthA = 1.0;
+            const earthB = Math.sqrt(1 - Math.pow(0.0167, 2));
+            const earthC = 0.0167;
+            
             const paddingLeft = 70;
             const paddingRight = 40;
             const paddingTop = 40;
@@ -302,6 +307,7 @@ with col1:
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
                 ctx.strokeRect(paddingLeft, paddingTop, plotWidth, plotHeight);
 
+                // 골디락스 존(생명체 거주가능 영역) 렌더링
                 if (showHabitableZone) {{
                     ctx.save();
                     ctx.translate(toCanvasX(0), toCanvasY(0));
@@ -316,7 +322,20 @@ with col1:
                     ctx.restore();
                 }}
 
-                // 행성 궤도선 그리기
+                // 지구 궤도 비교선 렌더링
+                if (showEarthOrbit) {{
+                    ctx.save();
+                    ctx.translate(toCanvasX(earthC), toCanvasY(0));
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+                    ctx.lineWidth = 1.0;
+                    ctx.setLineDash([2, 4]);
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, earthA * scale, earthB * scale, 0, 0, 2 * Math.PI);
+                    ctx.stroke();
+                    ctx.restore();
+                }}
+
+                // 대상 행성 궤도선 그리기
                 ctx.save();
                 ctx.translate(toCanvasX(c), toCanvasY(0));
                 ctx.strokeStyle = 'rgba(74, 144, 226, 0.6)';
@@ -327,7 +346,7 @@ with col1:
                 ctx.stroke();
                 ctx.restore();
                 
-                // 항성 렌더링
+                // 중심 항성 렌더링
                 let renderStarRad = Math.max(0.5, starRadAU * scale); 
                 ctx.beginPath();
                 ctx.arc(toCanvasX(0), toCanvasY(0), renderStarRad, 0, 2 * Math.PI);
@@ -337,17 +356,16 @@ with col1:
                 ctx.fill();
                 ctx.shadowBlur = 0;
                 
-                // 행성 좌표
+                // 행성 좌표 및 렌더링
                 let pX = toCanvasX(planetX_AU);
                 let pY = toCanvasY(planetY_AU);
                 let renderPlanetRad = Math.max(0.5, planetRadAU * scale); 
                 
-                // 정밀 십자선 렌더링
+                // 정밀 십자 지시선 렌더링
                 if (highlightPlanet) {{
                     ctx.save();
                     ctx.strokeStyle = 'rgba(29, 209, 161, 0.8)'; 
                     ctx.lineWidth = 1;
-                    
                     ctx.beginPath();
                     ctx.moveTo(pX - 16, pY); ctx.lineTo(pX - 5, pY);
                     ctx.moveTo(pX + 5, pY); ctx.lineTo(pX + 16, pY);
@@ -405,6 +423,6 @@ with col2:
         f"* **항성 반지름:** `{star_rad_display}` \n"
         f"* **항성 질량:** `{check_val(p_data['st_mass'] if 'st_mass' in p_data else np.nan, 'Solar Mass')}`\n"
         f"* **항성 표면온도:** `{star_teff_display}`\n"
-        f"* **분광형:** ` {star_spectral_type} `"  # 원본 항목값 그대로 노출
+        f"* **분광형:** ` {star_spectral_type} `"
     )
     st.markdown(info_text)
