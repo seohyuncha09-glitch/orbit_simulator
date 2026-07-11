@@ -37,7 +37,8 @@ st.sidebar.markdown("---")
 show_earth_orbit = st.sidebar.checkbox("🌍 지구 궤도 비교선 표시", value=False)
 show_habitable_zone = st.sidebar.checkbox("🟢 골디락스 존 표시", value=False)
 
-# 인위적인 비율 보기 체크박스는 삭제되었습니다 (전면 실제 비율 적용)
+# ✨ [추가] 행성 강조 표시 체크박스
+highlight_planet = st.sidebar.checkbox("✨ 행성 위치 강조 (발광 효과)", value=True)
 
 # 행성 데이터 추출
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
@@ -174,6 +175,7 @@ with col1:
             
             const showEarthOrbit = {str(show_earth_orbit).lower()};
             const showHabitableZone = {str(show_habitable_zone).lower()};
+            const highlightPlanet = {str(highlight_planet).lower()}; // ✨ 강조 상태 변수 받아오기
             
             const hzInner = {hz_inner};
             const hzOuter = {hz_outer};
@@ -194,7 +196,6 @@ with col1:
             const plotWidth = canvas.width - (paddingLeft + paddingRight);
             const plotHeight = canvas.height - (paddingTop + paddingBottom);
             
-            // 초기 뷰 제한 (궤도가 화면에 딱 맞게)
             const baseLimitAU = (a + c) * 1.3; 
             
             let currentDays = 0;
@@ -220,8 +221,6 @@ with col1:
             zoomSlider.addEventListener('input', (event) => {{
                 let power = parseFloat(event.target.value);
                 currentZoom = Math.pow(10, power);
-                
-                // 보기 좋게 포맷팅
                 let displayTxt = currentZoom >= 1000 ? 
                                  (currentZoom/1000).toFixed(1) + "k x" : 
                                  currentZoom.toFixed(1) + "x";
@@ -253,11 +252,10 @@ with col1:
                     focusY_AU = planetY_AU;
                 }}
                 
-                // 좌표 변환 유틸리티 (AU -> Canvas Px)
                 function toCanvasX(xAU) {{ return screenCenterX + (xAU - focusX_AU) * scale; }}
                 function toCanvasY(yAU) {{ return screenCenterY - (yAU - focusY_AU) * scale; }}
                 
-                // 그리드 렌더링 (동적 간격)
+                // 그리드 렌더링
                 ctx.lineWidth = 1;
                 ctx.font = "11px 'Segoe UI'";
                 
@@ -324,7 +322,7 @@ with col1:
                 ctx.restore();
                 
                 // 항성 렌더링 (True Scale)
-                let renderStarRad = Math.max(0.5, starRadAU * scale); // 아무리 작아도 0.5px 점으로 유지
+                let renderStarRad = Math.max(0.5, starRadAU * scale); 
                 ctx.beginPath();
                 ctx.arc(toCanvasX(0), toCanvasY(0), renderStarRad, 0, 2 * Math.PI);
                 ctx.fillStyle = starColor;
@@ -334,9 +332,25 @@ with col1:
                 ctx.shadowBlur = 0;
                 
                 // 행성 렌더링 (True Scale)
-                let renderPlanetRad = Math.max(0.5, planetRadAU * scale); // 아무리 작아도 0.5px 점으로 유지
+                let pX = toCanvasX(planetX_AU);
+                let pY = toCanvasY(planetY_AU);
+                let renderPlanetRad = Math.max(0.5, planetRadAU * scale); 
+                
+                // ✨ [추가] 행성 강조 표시 스크립트 효과
+                if (highlightPlanet) {{
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(pX, pY, Math.max(8, renderPlanetRad + 5), 0, 2 * Math.PI);
+                    ctx.strokeStyle = 'rgba(29, 209, 161, 0.6)';
+                    ctx.lineWidth = 1.5;
+                    ctx.shadowColor = '#1dd1a1';
+                    ctx.shadowBlur = 10; // 멀리서도 번쩍이도록 네온 효과 부여
+                    ctx.stroke();
+                    ctx.restore();
+                }}
+                
                 ctx.beginPath();
-                ctx.arc(toCanvasX(planetX_AU), toCanvasY(planetY_AU), renderPlanetRad, 0, 2 * Math.PI);
+                ctx.arc(pX, pY, renderPlanetRad, 0, 2 * Math.PI);
                 ctx.fillStyle = '#1dd1a1';
                 ctx.fill();
                 
