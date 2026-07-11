@@ -37,8 +37,8 @@ st.sidebar.markdown("---")
 show_earth_orbit = st.sidebar.checkbox("🌍 지구 궤도 비교선 표시", value=False)
 show_habitable_zone = st.sidebar.checkbox("🟢 골디락스 존 표시", value=False)
 
-# 🎯 깔끔한 십자 조준선으로 변경
-highlight_planet = st.sidebar.checkbox("🎯 행성 추적 십자선(Crosshair) 표시", value=True)
+# 📡 펄스 레이더 효과 체크박스로 명칭 변경
+highlight_planet = st.sidebar.checkbox("📡 행성 펄스 레이더(Radar) 효과 표시", value=True)
 
 # 행성 데이터 추출
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
@@ -198,6 +198,10 @@ with col1:
             let speedMultiplier = 1.0;
             let currentZoom = 1.0;
             
+            // 📡 펄스 레이더용 독립 애니메이션 변수
+            let radarRadius = 0;
+            const maxRadarRadius = 25; // 파동이 퍼져나가는 최대 반경(px)
+            
             controlBtn.addEventListener('click', () => {{
                 isPlaying = !isPlaying;
                 controlBtn.textContent = isPlaying ? "⏸ Pause" : "▶ Play";
@@ -302,10 +306,10 @@ with col1:
                     ctx.restore();
                 }}
 
-                # 행성 궤도선
+                // 행성 궤도선
                 ctx.save();
                 ctx.translate(toCanvasX(c), toCanvasY(0));
-                ctx.strokeStyle = 'rgba(74, 144, 226, 0.6)';
+                ctx.strokeStyle = 'rgba(74, 144, 226, 0.5)';
                 ctx.lineWidth = 1.2;
                 ctx.setLineDash([4, 4]);
                 ctx.beginPath();
@@ -313,7 +317,7 @@ with col1:
                 ctx.stroke();
                 ctx.restore();
                 
-                # 항성 렌더링
+                // 항성 렌더링
                 let renderStarRad = Math.max(0.5, starRadAU * scale); 
                 ctx.beginPath();
                 ctx.arc(toCanvasX(0), toCanvasY(0), renderStarRad, 0, 2 * Math.PI);
@@ -323,35 +327,37 @@ with col1:
                 ctx.fill();
                 ctx.shadowBlur = 0;
                 
-                # 행성 좌표
+                // 행성 좌표
                 let pX = toCanvasX(planetX_AU);
                 let pY = toCanvasY(planetY_AU);
                 let renderPlanetRad = Math.max(0.5, planetRadAU * scale); 
                 
-                # 🎯 [수정] 동그라미를 제거하고 정밀 십자선만 렌더링
+                // 📡 [수정] 차분하게 퍼져나가는 펄스 레이더 효과 적용
                 if (highlightPlanet) {{
                     ctx.save();
-                    ctx.strokeStyle = 'rgba(29, 209, 161, 0.75)'; // 민트색 관측선
-                    ctx.lineWidth = 1;
+                    // 레이더 반지름 업데이트 (프레임마다 0.4px씩 팽창)
+                    radarRadius += 0.4;
+                    if (radarRadius > maxRadarRadius) radarRadius = 0;
                     
+                    // 멀어질수록 투명해지는 비율 계산
+                    let alpha = 1.0 - (radarRadius / maxRadarRadius);
+                    
+                    ctx.strokeStyle = `rgba(29, 209, 161, ${alpha * 0.7})`; // 부드러운 천문 민트색
+                    ctx.lineWidth = 1.2;
                     ctx.beginPath();
-                    // 가로선 (중앙에 5px 공백)
-                    ctx.moveTo(pX - 16, pY); ctx.lineTo(pX - 5, pY);
-                    ctx.moveTo(pX + 5, pY); ctx.lineTo(pX + 16, pY);
-                    // 세로선 (중앙에 5px 공백)
-                    ctx.moveTo(pX, pY - 16); ctx.lineTo(pX, pY - 5);
-                    ctx.moveTo(pX, pY + 5); ctx.lineTo(pX, pY + 16);
+                    // 행성의 현재 표시 크기(최소 0.5px)를 기점으로 파동이 퍼짐
+                    ctx.arc(pX, pY, renderPlanetRad + radarRadius, 0, 2 * Math.PI);
                     ctx.stroke();
                     ctx.restore();
                 }}
                 
-                # 실제 행성 (점)
+                // 실제 행성 (점)
                 ctx.beginPath();
                 ctx.arc(pX, pY, renderPlanetRad, 0, 2 * Math.PI);
                 ctx.fillStyle = '#1dd1a1';
                 ctx.fill();
                 
-                # 속도 계산
+                // 속도 계산
                 let r_p = Math.sqrt(planetX_AU*planetX_AU + planetY_AU*planetY_AU);
                 let v_kms = 0;
                 if (r_p > 0 && (2/r_p - 1/a) > 0) {{
