@@ -22,7 +22,7 @@ except Exception as e:
 st.set_page_config(page_title="행성 공전 궤도 시뮬레이터 (True Scale)", layout="wide")
 
 st.title("행성 공전 궤도 시뮬레이터")
-st.markdown("NASA Exoplanet Archive를 기반으로 제작되었습니다.**")
+st.markdown("NASA Exoplanet Archive를 기반으로 제작되었습니다.")
 
 # ⚙️ 사이드바 제어 패널
 st.sidebar.header("⚙️ 제어 패널")
@@ -94,7 +94,7 @@ star_color = get_star_color_by_spectype(star_spectral_type, star_teff)
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.subheader(f"✨ {selected_planet} 궤도 시뮬레이")
+    st.subheader(f"✨ {selected_planet} 궤도 시뮬레이션")
     
     html_code = f"""
     <!DOCTYPE html>
