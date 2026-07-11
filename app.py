@@ -62,12 +62,17 @@ star_teff = p_data['st_teff'] if 'st_teff' in p_data else np.nan
 # 파일의 st_spectype 항목값 가져오기
 # [Python 코드 영역]
 
+# --- [기존 에러 발생 구간 수정] ---
+
+star_teff = float(p_data['st_teff']) if 'st_teff' in p_data and not pd.isna(p_data['st_teff']) else 5778.0
+star_rad = float(p_data['st_rad']) if 'st_rad' in p_data and not pd.isna(p_data['st_rad']) else 1.0
+star_spectral_type = p_data['st_spectype'] if 'st_spectype' in p_data and not pd.isna(p_data['st_spectype']) else 'G'
+star_color, star_type_name = get_star_color_and_type(star_teff) 
+
 T_SUN = 5778.0
-r_star = star_rad if not pd.isna(star_rad) else 1.0
-t_star = star_teff if not pd.isna(star_teff) else T_SUN
-star_luminosity = (r_star ** 2) * ((t_star / T_SUN) ** 4)
-hz_inner = np.sqrt(star_luminosity / 1.1) 
-hz_outer = np.sqrt(star_luminosity / 0.53) 
+star_luminosity = (star_rad ** 2) * ((star_teff / T_SUN) ** 4)
+hz_inner = np.sqrt(star_luminosity / 1.1)
+hz_outer = np.sqrt(star_luminosity / 0.53)
 
 # 분광형 데이터(st_spectype) 첫 글자 기반 색상 지정 함수
 def get_star_color_by_spectype(spectype, teff):
