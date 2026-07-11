@@ -37,7 +37,7 @@ st.sidebar.markdown("---")
 show_earth_orbit = st.sidebar.checkbox("🌍 지구 궤도 비교선 표시", value=False)
 show_habitable_zone = st.sidebar.checkbox("🟢 골디락스 존 표시", value=False)
 
-# 📡 펄스 레이더 효과 체크박스로 명칭 변경
+# 📡 펄스 레이더 효과 체크박스
 highlight_planet = st.sidebar.checkbox("📡 행성 펄스 레이더(Radar) 효과 표시", value=True)
 
 # 행성 데이터 추출
@@ -198,9 +198,9 @@ with col1:
             let speedMultiplier = 1.0;
             let currentZoom = 1.0;
             
-            // 📡 펄스 레이더용 독립 애니메이션 변수
+            // 📡 펄스 레이더용 애니메이션 변수
             let radarRadius = 0;
-            const maxRadarRadius = 25; // 파동이 퍼져나가는 최대 반경(px)
+            const maxRadarRadius = 25; 
             
             controlBtn.addEventListener('click', () => {{
                 isPlaying = !isPlaying;
@@ -332,20 +332,17 @@ with col1:
                 let pY = toCanvasY(planetY_AU);
                 let renderPlanetRad = Math.max(0.5, planetRadAU * scale); 
                 
-                // 📡 [수정] 차분하게 퍼져나가는 펄스 레이더 효과 적용
+                // 📡 [수정완료] 파이썬 f-string 중괄호 충돌 오류 해결
                 if (highlightPlanet) {{
                     ctx.save();
-                    // 레이더 반지름 업데이트 (프레임마다 0.4px씩 팽창)
                     radarRadius += 0.4;
                     if (radarRadius > maxRadarRadius) radarRadius = 0;
                     
-                    // 멀어질수록 투명해지는 비율 계산
                     let alpha = 1.0 - (radarRadius / maxRadarRadius);
                     
-                    ctx.strokeStyle = `rgba(29, 209, 161, ${alpha * 0.7})`; // 부드러운 천문 민트색
+                    ctx.strokeStyle = `rgba(29, 209, 161, ${{alpha * 0.7}})`; 
                     ctx.lineWidth = 1.2;
                     ctx.beginPath();
-                    // 행성의 현재 표시 크기(최소 0.5px)를 기점으로 파동이 퍼짐
                     ctx.arc(pX, pY, renderPlanetRad + radarRadius, 0, 2 * Math.PI);
                     ctx.stroke();
                     ctx.restore();
