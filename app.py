@@ -153,7 +153,7 @@ with col1:
             
             <div class="row">
                 <div class="sliderContainer">
-                    <span>🔍 기하급수적 줌 (실제 크기 관측용):</span>
+                    <span>확대/축소:</span>
                     <input type="range" id="zoomSlider" min="-1" max="5.5" step="0.1" value="0">
                     <span id="zoomVal" style="width: 50px; text-align: right;">1x</span>
                 </div>
