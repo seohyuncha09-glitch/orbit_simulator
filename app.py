@@ -37,8 +37,8 @@ st.sidebar.markdown("---")
 show_earth_orbit = st.sidebar.checkbox("🌍 지구 궤도 비교선 표시", value=False)
 show_habitable_zone = st.sidebar.checkbox("🟢 골디락스 존 표시", value=False)
 
-# 🎯 깔끔한 타겟 지시선으로 변경
-highlight_planet = st.sidebar.checkbox("🎯 행성 추적 조준선(Crosshair) 표시", value=True)
+# 🎯 깔끔한 십자 조준선으로 변경
+highlight_planet = st.sidebar.checkbox("🎯 행성 추적 십자선(Crosshair) 표시", value=True)
 
 # 행성 데이터 추출
 p_data = df[df['pl_name'] == selected_planet].iloc[0]
@@ -302,7 +302,7 @@ with col1:
                     ctx.restore();
                 }}
 
-                // 행성 궤도선
+                # 행성 궤도선
                 ctx.save();
                 ctx.translate(toCanvasX(c), toCanvasY(0));
                 ctx.strokeStyle = 'rgba(74, 144, 226, 0.6)';
@@ -313,7 +313,7 @@ with col1:
                 ctx.stroke();
                 ctx.restore();
                 
-                // 항성 렌더링
+                # 항성 렌더링
                 let renderStarRad = Math.max(0.5, starRadAU * scale); 
                 ctx.beginPath();
                 ctx.arc(toCanvasX(0), toCanvasY(0), renderStarRad, 0, 2 * Math.PI);
@@ -323,39 +323,35 @@ with col1:
                 ctx.fill();
                 ctx.shadowBlur = 0;
                 
-                // 행성 좌표
+                # 행성 좌표
                 let pX = toCanvasX(planetX_AU);
                 let pY = toCanvasY(planetY_AU);
                 let renderPlanetRad = Math.max(0.5, planetRadAU * scale); 
                 
-                // 🎯 [수정] 테크니컬한 얇은 크로스헤어(조준선) 효과 적용
+                # 🎯 [수정] 동그라미를 제거하고 정밀 십자선만 렌더링
                 if (highlightPlanet) {{
                     ctx.save();
-                    ctx.strokeStyle = 'rgba(29, 209, 161, 0.7)'; // 차분한 민트색 관측선
+                    ctx.strokeStyle = 'rgba(29, 209, 161, 0.75)'; // 민트색 관측선
                     ctx.lineWidth = 1;
                     
-                    // 중앙 미세 원
                     ctx.beginPath();
-                    ctx.arc(pX, pY, 7, 0, 2 * Math.PI);
-                    ctx.stroke();
-                    
-                    // 십자 지시선 (+)
-                    ctx.beginPath();
-                    ctx.moveTo(pX - 15, pY); ctx.lineTo(pX - 9, pY);
-                    ctx.moveTo(pX + 9, pY); ctx.lineTo(pX + 15, pY);
-                    ctx.moveTo(pX, pY - 15); ctx.lineTo(pX, pY - 9);
-                    ctx.moveTo(pX, pY + 9); ctx.lineTo(pX, pY + 15);
+                    // 가로선 (중앙에 5px 공백)
+                    ctx.moveTo(pX - 16, pY); ctx.lineTo(pX - 5, pY);
+                    ctx.moveTo(pX + 5, pY); ctx.lineTo(pX + 16, pY);
+                    // 세로선 (중앙에 5px 공백)
+                    ctx.moveTo(pX, pY - 16); ctx.lineTo(pX, pY - 5);
+                    ctx.moveTo(pX, pY + 5); ctx.lineTo(pX, pY + 16);
                     ctx.stroke();
                     ctx.restore();
                 }}
                 
-                // 실제 행성 (점)
+                # 실제 행성 (점)
                 ctx.beginPath();
                 ctx.arc(pX, pY, renderPlanetRad, 0, 2 * Math.PI);
                 ctx.fillStyle = '#1dd1a1';
                 ctx.fill();
                 
-                // 속도 계산
+                # 속도 계산
                 let r_p = Math.sqrt(planetX_AU*planetX_AU + planetY_AU*planetY_AU);
                 let v_kms = 0;
                 if (r_p > 0 && (2/r_p - 1/a) > 0) {{
