@@ -404,7 +404,7 @@ with col1:
     </body>
     </html>
     """
-    st.components.v1.html(html_code, height=660)
+    st.components.v1.html(html_code, height=660, key=f"orbit_sim_{selected_planet}")
 
 with col2:
     st.subheader("📊 데이터")
